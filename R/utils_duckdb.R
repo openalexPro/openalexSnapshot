@@ -17,6 +17,14 @@
 #'   into the written parquet, which is what makes row-group pruning work.
 #' @return A DBI connection. The caller is responsible for disconnecting.
 #' @noRd
+#' Default operator
+#'
+#' Defined locally: base R only gained `%||%` in 4.4.
+#'
+#' @keywords internal
+#' @noRd
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 .oas_con <- function(memory_limit = NULL,
                      temp_dir = NULL,
                      threads = NULL,

@@ -42,6 +42,10 @@
 #' @param doi_index Explicit path to a `*_doi_idx.parquet`.
 #' @param data_set Dataset name used to locate indexes under `root_dir`.
 #' @param workers Parallel workers for record extraction.
+#' @param temp_dir Root for DuckDB's spill files. `NULL` (default) uses a
+#'   private directory under [tempdir()]. Never DuckDB's own default, which is
+#'   `.tmp` relative to the working directory and is therefore shared by every
+#'   concurrent caller.
 #' @param memory_limit DuckDB memory limit.
 #' @param verbose Print progress.
 #'
@@ -63,6 +67,7 @@ get_citing <- function(keypaper,
                        data_set = "works",
                        workers = NULL,
                        memory_limit = NULL,
+                       temp_dir = NULL,
                        verbose = TRUE) {
   return <- match.arg(return)
   .oas_check_depth(depth)
@@ -97,8 +102,13 @@ get_citing <- function(keypaper,
             length(kp), " keypaper(s) ...")
   }
 
-  con <- .oas_con(memory_limit = memory_limit)
+  # A private spill directory, not DuckDB's `.tmp` relative to the working
+  # directory: concurrent callers (a pool of pro_snowball() runs, say) would
+  # otherwise share one and corrupt each other's spill files.
+  ctmp <- temp_dir %||% file.path(tempdir(), "oas_citing", basename(tempfile("c")))
+  con <- .oas_con(memory_limit = memory_limit, temp_dir = ctmp)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(unlink(ctmp, recursive = TRUE, force = TRUE), add = TRUE)
 
   # The index stores long-form IDs, so they come straight out.
   edges <- DBI::dbGetQuery(con, paste0(
@@ -128,6 +138,7 @@ get_cited <- function(keypaper,
                       data_set = "works",
                       workers = NULL,
                       memory_limit = NULL,
+                      temp_dir = NULL,
                       verbose = TRUE) {
   return <- match.arg(return)
   .oas_check_depth(depth)
@@ -145,11 +156,17 @@ get_cited <- function(keypaper,
   # lookup_by_id() grew a `columns` argument.
   recs <- lookup_by_id(ids = kp, index_file = id_index, backend = "r",
                        columns = c("id", "referenced_works"),
-                       workers = workers, verbose = verbose)
+                       workers = workers, memory_limit = memory_limit,
+                       temp_dir = temp_dir, verbose = verbose)
   if (nrow(recs) == 0L) return(.oas_empty_result(return))
 
-  con <- .oas_con(memory_limit = memory_limit)
+  # A private spill directory, not DuckDB's `.tmp` relative to the working
+  # directory: concurrent callers (a pool of pro_snowball() runs, say) would
+  # otherwise share one and corrupt each other's spill files.
+  ctmp <- temp_dir %||% file.path(tempdir(), "oas_citing", basename(tempfile("c")))
+  con <- .oas_con(memory_limit = memory_limit, temp_dir = ctmp)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(unlink(ctmp, recursive = TRUE, force = TRUE), add = TRUE)
   duckdb::duckdb_register(con, "recs", recs)
 
   ty <- DBI::dbGetQuery(con,

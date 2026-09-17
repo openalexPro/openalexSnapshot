@@ -333,3 +333,34 @@ test_that(".oas_stage1_sql() emits the partitioned write the resume logic needs"
   expect_match(q, "/c/b.parquet", fixed = TRUE)
   expect_match(q, "position\\('/W' IN r.ref\\)")
 })
+
+test_that("parallel lookup workers do not spill into the working directory", {
+  # Regression test. Every worker used to open .oas_con() with no temp_dir, so
+  # they all inherited DuckDB's default `.tmp` -- which is relative to the
+  # working directory -- and wrote colliding duckdb_temp_storage_*.tmp files
+  # into one place. build_citation_index() documents that hazard; the lookup
+  # path, which pro_snowball(snapshot=) drives in parallel, did not guard it.
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  idx <- build_corpus_index(corpus_dir = corpus, backend = "r", verbose = FALSE)
+
+  wd <- withr::local_tempdir()
+  withr::local_dir(wd)
+
+  got <- lookup_by_id(ids = tiny_ids()[1:3], index_file = idx, backend = "r",
+                      columns = c("id"), workers = 2, verbose = FALSE)
+  expect_equal(nrow(got), 3L)
+  expect_false(dir.exists(file.path(wd, ".tmp")))
+})
+
+test_that("lookup_by_id exposes memory_limit and temp_dir", {
+  fm <- formals(lookup_by_id)
+  expect_true(all(c("memory_limit", "temp_dir") %in% names(fm)))
+  expect_null(eval(fm$memory_limit))
+  expect_null(eval(fm$temp_dir))
+})
+
+test_that("get_citing and get_cited expose temp_dir", {
+  expect_true("temp_dir" %in% names(formals(get_citing)))
+  expect_true("temp_dir" %in% names(formals(get_cited)))
+})

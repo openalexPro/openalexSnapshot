@@ -39,6 +39,12 @@
 #'   compiled Rust library when it is loaded and the pure-R/DuckDB
 #'   implementation otherwise. `"r"` forces pure R and is always available.
 #'   `"rust"` forces the compiled path and errors if it is not loaded.
+#' @param memory_limit DuckDB `memory_limit` for each worker. `NULL` (default)
+#'   leaves DuckDB's own, which is ~80% of system RAM *per worker*.
+#' @param temp_dir Root for DuckDB's spill files. `NULL` (default) uses a
+#'   private per-worker directory under [tempdir()]. Workers must not share
+#'   one: concurrent DuckDB instances write colliding
+#'   `duckdb_temp_storage_*.tmp` files and corrupt each other's spill.
 #' @param columns Character vector of columns to return. `NULL` (default)
 #'   returns all. Projection matters: reading 2 of 51 columns from a corpus of
 #'   nested structs is far cheaper than `SELECT *`. Requires
@@ -104,7 +110,9 @@ lookup_by_id <- function(
   output      = NULL,
   backend     = c("auto", "r", "rust"),
   columns     = NULL,
-  add_columns = NULL
+  add_columns = NULL,
+  memory_limit = NULL,
+  temp_dir    = NULL
 ) {
   if (missing(ids) || length(ids) == 0L) {
     stop("'ids' must be provided and non-empty.", call. = FALSE)
@@ -117,6 +125,7 @@ lookup_by_id <- function(
       index_file = idx, ids = as.character(ids),
       columns = columns, add_columns = add_columns,
       selected = selected, workers = workers, output = out,
+      memory_limit = memory_limit, temp_dir = temp_dir,
       verbose = isTRUE(verbose)
     )
   }

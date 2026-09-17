@@ -17,7 +17,9 @@ lookup_by_id(
   output = NULL,
   backend = c("auto", "r", "rust"),
   columns = NULL,
-  add_columns = NULL
+  add_columns = NULL,
+  memory_limit = NULL,
+  temp_dir = NULL
 )
 }
 \arguments{
@@ -78,6 +80,14 @@ row, e.g. \code{list(relation = "citing")}. Values are embedded as \strong{SQL s
 literals}, matching \code{openalexPro::pro_request_parquet()}, so a logical
 must be passed as \code{"TRUE"} and cast by the caller. Requires
 \code{backend = "r"}.}
+
+\item{memory_limit}{DuckDB \code{memory_limit} for each worker. \code{NULL} (default)
+leaves DuckDB's own, which is ~80\% of system RAM \emph{per worker}.}
+
+\item{temp_dir}{Root for DuckDB's spill files. \code{NULL} (default) uses a
+private per-worker directory under \code{\link[=tempdir]{tempdir()}}. Workers must not share
+one: concurrent DuckDB instances write colliding
+\code{duckdb_temp_storage_*.tmp} files and corrupt each other's spill.}
 }
 \value{
 \itemize{
