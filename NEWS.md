@@ -1,3 +1,28 @@
+# openalexSnapshot 0.3.0
+
+## Bug fix: parallel lookup workers shared one spill directory
+
+`.oas_lookup_one_index()` opened each worker's DuckDB connection with no
+`temp_dir`, so every worker in the pool inherited DuckDB's default -- `.tmp`,
+*relative to the working directory*. Concurrent instances then wrote colliding
+`duckdb_temp_storage_*.tmp` files into one place and corrupted each other's
+spill. This is exactly the hazard `build_citation_index()` documents and
+guards against; the lookup path, which `pro_snowball(snapshot = )` drives in
+parallel, did not.
+
+Each worker now gets a private directory under `tempdir()`, removed on exit.
+`get_citing()` and `get_cited()` get the same treatment for their own
+connections, which matters when several callers run at once.
+
+## `lookup_by_id()` can be given a memory budget
+
+`.oas_lookup_one_index()` has always accepted `memory_limit`, but the exported
+`lookup_by_id()` had no such argument and never passed one, so it was
+unreachable -- every worker ran at DuckDB's default of ~80% of system RAM,
+*each*. `lookup_by_id()` now takes `memory_limit` and `temp_dir` and forwards
+both; `get_citing()` / `get_cited()` gain `temp_dir` alongside the
+`memory_limit` they already had.
+
 # openalexSnapshot 0.2.0
 
 ## New: offline citation graph

@@ -17,7 +17,9 @@ lookup_by_id(
   output = NULL,
   backend = c("auto", "r", "rust"),
   columns = NULL,
-  add_columns = NULL
+  add_columns = NULL,
+  memory_limit = NULL,
+  temp_dir = NULL
 )
 }
 \arguments{
@@ -62,8 +64,7 @@ removed in 0.1.0; the package is pure R. \code{"auto"} (the default) and
 \code{"r"} both use the pure-R/DuckDB implementation. \code{"rust"} uses the
 compiled library and is \strong{deprecated}: it writes an unsorted index and
 supports neither \code{columns} nor \code{add_columns}. It will be removed in a
-future release. \code{snapshot_to_parquet()} is unaffected and remains
-Rust-only. \code{"auto"} (the default) uses the
+future release. \code{"auto"} (the default) uses the
 compiled Rust library when it is loaded and the pure-R/DuckDB
 implementation otherwise. \code{"r"} forces pure R and is always available.
 \code{"rust"} forces the compiled path and errors if it is not loaded.}
@@ -78,6 +79,14 @@ row, e.g. \code{list(relation = "citing")}. Values are embedded as \strong{SQL s
 literals}, matching \code{openalexPro::pro_request_parquet()}, so a logical
 must be passed as \code{"TRUE"} and cast by the caller. Requires
 \code{backend = "r"}.}
+
+\item{memory_limit}{DuckDB \code{memory_limit} for each worker. \code{NULL} (default)
+leaves DuckDB's own, which is ~80\% of system RAM \emph{per worker}.}
+
+\item{temp_dir}{Root for DuckDB's spill files. \code{NULL} (default) uses a
+private per-worker directory under \code{\link[=tempdir]{tempdir()}}. Workers must not share
+one: concurrent DuckDB instances write colliding
+\code{duckdb_temp_storage_*.tmp} files and corrupt each other's spill.}
 }
 \value{
 \itemize{
@@ -123,6 +132,5 @@ lookup_by_id(
 
 }
 \seealso{
-\code{\link[=build_corpus_index]{build_corpus_index()}} for building the required index,
-\code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}} for creating the Parquet corpus.
+\code{\link[=build_corpus_index]{build_corpus_index()}} for building the required index.
 }

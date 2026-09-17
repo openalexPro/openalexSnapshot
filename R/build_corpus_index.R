@@ -1,7 +1,7 @@
 #' Build a Parquet ID-lookup index
 #'
 #' Builds a `<dataset>_id_idx/` index from the Parquet corpus produced
-#' by [snapshot_to_parquet()], enabling fast record retrieval by OpenAlex ID
+#' by the snapshot download and conversion pipeline, enabling fast record retrieval by OpenAlex ID
 #' using [lookup_by_id()].
 #'
 #' The function uses a two-stage approach:
@@ -14,7 +14,7 @@
 #' dataset directory.
 #'
 #' @param root_dir Root directory containing a `parquet/` subdirectory produced
-#'   by [snapshot_to_parquet()]. If provided, the index for each dataset in
+#'   by the snapshot conversion pipeline. If provided, the index for each dataset in
 #'   `data_sets` is created at `<root_dir>/parquet/<dataset>_id_idx/`.
 #' @param data_sets Character vector of dataset names to index (e.g.
 #'   `c("works", "authors")`). `NULL` indexes all datasets found under
@@ -53,8 +53,7 @@
 #'   `"r"` both use the pure-R/DuckDB implementation. `"rust"` uses the
 #'   compiled library and is **deprecated**: it writes an unsorted index and
 #'   supports neither `columns` nor `add_columns`. It will be removed in a
-#'   future release. `snapshot_to_parquet()` is unaffected and remains
-#'   Rust-only. `"auto"` (the default) uses the
+#'   future release. `"auto"` (the default) uses the
 #'   compiled Rust library when it is loaded and the pure-R/DuckDB
 #'   implementation otherwise, so behaviour is unchanged for an installed
 #'   binary. `"r"` forces pure R and is always available. `"rust"` forces the

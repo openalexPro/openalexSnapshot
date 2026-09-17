@@ -19,6 +19,7 @@ get_citing(
   data_set = "works",
   workers = NULL,
   memory_limit = NULL,
+  temp_dir = NULL,
   verbose = TRUE
 )
 
@@ -35,6 +36,7 @@ get_cited(
   data_set = "works",
   workers = NULL,
   memory_limit = NULL,
+  temp_dir = NULL,
   verbose = TRUE
 )
 }
@@ -88,6 +90,11 @@ corpus. Set \code{Inf} to lift the guard deliberately.}
 \item{workers}{Parallel workers for record extraction.}
 
 \item{memory_limit}{DuckDB memory limit.}
+
+\item{temp_dir}{Root for DuckDB's spill files. \code{NULL} (default) uses a
+private directory under \code{\link[=tempdir]{tempdir()}}. Never DuckDB's own default, which is
+\code{.tmp} relative to the working directory and is therefore shared by every
+concurrent caller.}
 
 \item{verbose}{Print progress.}
 }

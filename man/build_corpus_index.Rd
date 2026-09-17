@@ -20,7 +20,7 @@ build_corpus_index(
 }
 \arguments{
 \item{root_dir}{Root directory containing a \verb{parquet/} subdirectory produced
-by \code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}}. If provided, the index for each dataset in
+by the snapshot conversion pipeline. If provided, the index for each dataset in
 \code{data_sets} is created at \verb{<root_dir>/parquet/<dataset>_id_idx/}.}
 
 \item{data_sets}{Character vector of dataset names to index (e.g.
@@ -69,8 +69,7 @@ removed in 0.1.0; the package is pure R. \code{"auto"} (the default) and
 \code{"r"} both use the pure-R/DuckDB implementation. \code{"rust"} uses the
 compiled library and is \strong{deprecated}: it writes an unsorted index and
 supports neither \code{columns} nor \code{add_columns}. It will be removed in a
-future release. \code{snapshot_to_parquet()} is unaffected and remains
-Rust-only. \code{"auto"} (the default) uses the
+future release. \code{"auto"} (the default) uses the
 compiled Rust library when it is loaded and the pure-R/DuckDB
 implementation otherwise, so behaviour is unchanged for an installed
 binary. \code{"r"} forces pure R and is always available. \code{"rust"} forces the
@@ -82,7 +81,7 @@ created index file. When \code{root_dir} is used, invisibly returns \code{root_d
 }
 \description{
 Builds a \verb{<dataset>_id_idx/} index from the Parquet corpus produced
-by \code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}}, enabling fast record retrieval by OpenAlex ID
+by the snapshot download and conversion pipeline, enabling fast record retrieval by OpenAlex ID
 using \code{\link[=lookup_by_id]{lookup_by_id()}}.
 }
 \details{

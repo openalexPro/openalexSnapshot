@@ -23,6 +23,7 @@
                                   selected = NULL,
                                   workers = NULL,
                                   memory_limit = NULL,
+                                  temp_dir = NULL,
                                   output = NULL,
                                   verbose = TRUE) {
   index_file <- normalizePath(index_file, mustWork = FALSE)
@@ -70,8 +71,14 @@
   }
 
   # SELECT list: projection + constant columns --------------------------------
+  # `file_row_number = true` adds a synthetic column that `*` would pick up.
+  # It is an index artefact: the in-memory path stripped it afterwards, but
+  # the COPY path wrote it into the parquet, so `output=` and the returned
+  # data frame had different schemas -- and a downstream reader that also
+  # asks for file_row_number then fails outright ("Using file_row_number
+  # option on file with column named file_row_number is not supported").
   sel <- if (is.null(columns)) {
-    "*"
+    "* EXCLUDE (file_row_number)"
   } else {
     paste(sprintf('"%s"', gsub('"', '""', columns, fixed = TRUE)), collapse = ", ")
   }
@@ -106,8 +113,19 @@
       p <- progressr::progressor(along = file_chunks)
       results <- future.apply::future_lapply(names(file_chunks), function(pq) {
         rows <- paste(file_chunks[[pq]], collapse = ", ")
-        wcon <- .oas_con(memory_limit = memory_limit, threads = 1L)
+        # Each worker needs its OWN spill directory. DuckDB's default is
+        # `.tmp` relative to the working directory, which every worker in the
+        # pool inherits -- they then write colliding duckdb_temp_storage_*.tmp
+        # files and corrupt each other's spill. This is the same hazard
+        # build_citation_index() documents; it was missing here.
+        wtmp <- file.path(
+          temp_dir %||% file.path(tempdir(), "oas_lookup"),
+          gsub("[^A-Za-z0-9._-]", "_", basename(pq))
+        )
+        wcon <- .oas_con(memory_limit = memory_limit, temp_dir = wtmp,
+                         threads = 1L)
         on.exit(DBI::dbDisconnect(wcon, shutdown = TRUE), add = TRUE)
+        on.exit(unlink(wtmp, recursive = TRUE, force = TRUE), add = TRUE)
 
         body <- paste0(
           "SELECT ", sel, " FROM read_parquet(", .oas_sql_str(pq),
@@ -147,6 +165,7 @@
   }
 
   result <- do.call(rbind, results)
+  # Defensive: the SELECT list already excludes it.
   if ("file_row_number" %in% names(result)) result$file_row_number <- NULL
   if (isTRUE(verbose)) message("Retrieved ", nrow(result), " records")
   result

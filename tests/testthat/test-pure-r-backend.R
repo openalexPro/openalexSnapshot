@@ -226,9 +226,10 @@ test_that("every public function is actually exported in NAMESPACE", {
   # devtools::load_all() exposes unexported objects, so the rest of the suite
   # cannot catch a lost @export tag -- and one was lost this way, leaving
   # build_corpus_index() invisible to library() while all tests still passed.
-  # Read NAMESPACE directly rather than asking the loaded namespace.
-  ns <- readLines(testthat::test_path("..", "..", "NAMESPACE"), warn = FALSE)
-  exported <- sub("^export\\((.*)\\)$", "\\1", grep("^export\\(", ns, value = TRUE))
+  # getNamespaceExports() answers the question library() would ask. (Reading
+  # NAMESPACE from the source tree does not survive R CMD check, which runs
+  # the tests from an installed copy with no source layout around them.)
+  exported <- getNamespaceExports("openalexSnapshot")
   expect_setequal(
     exported,
     c("build_citation_index", "build_corpus_index", "build_doi_index",
@@ -332,4 +333,65 @@ test_that(".oas_stage1_sql() emits the partitioned write the resume logic needs"
   expect_match(q, "/c/a.parquet", fixed = TRUE)
   expect_match(q, "/c/b.parquet", fixed = TRUE)
   expect_match(q, "position\\('/W' IN r.ref\\)")
+})
+
+test_that("parallel lookup workers do not spill into the working directory", {
+  # Regression test. Every worker used to open .oas_con() with no temp_dir, so
+  # they all inherited DuckDB's default `.tmp` -- which is relative to the
+  # working directory -- and wrote colliding duckdb_temp_storage_*.tmp files
+  # into one place. build_citation_index() documents that hazard; the lookup
+  # path, which pro_snowball(snapshot=) drives in parallel, did not guard it.
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  idx <- build_corpus_index(corpus_dir = corpus, backend = "r", verbose = FALSE)
+
+  wd <- withr::local_tempdir()
+  withr::local_dir(wd)
+
+  got <- lookup_by_id(ids = tiny_ids()[1:3], index_file = idx, backend = "r",
+                      columns = c("id"), workers = 2, verbose = FALSE)
+  expect_equal(nrow(got), 3L)
+  expect_false(dir.exists(file.path(wd, ".tmp")))
+})
+
+test_that("lookup_by_id exposes memory_limit and temp_dir", {
+  fm <- formals(lookup_by_id)
+  expect_true(all(c("memory_limit", "temp_dir") %in% names(fm)))
+  expect_null(eval(fm$memory_limit))
+  expect_null(eval(fm$temp_dir))
+})
+
+test_that("get_citing and get_cited expose temp_dir", {
+  expect_true("temp_dir" %in% names(formals(get_citing)))
+  expect_true("temp_dir" %in% names(formals(get_cited)))
+})
+
+test_that("lookup_by_id(output=) writes the same schema it returns", {
+  # The COPY path used to keep the synthetic `file_row_number` column while
+  # the in-memory path stripped it, so the two disagreed -- and any reader
+  # that itself asked for file_row_number could not open the result at all.
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  idx <- build_corpus_index(corpus_dir = corpus, backend = "r", verbose = FALSE)
+  ids <- tiny_ids()[1:3]
+
+  in_mem <- lookup_by_id(ids = ids, index_file = idx, backend = "r",
+                         verbose = FALSE)
+  out <- file.path(tmp, "written")
+  lookup_by_id(ids = ids, index_file = idx, backend = "r", output = out,
+               verbose = FALSE)
+  written <- arrow::open_dataset(out) |> dplyr::collect()
+
+  expect_false("file_row_number" %in% names(written))
+  expect_setequal(names(written), names(in_mem))
+
+  # and the written output must be re-readable with file_row_number = true
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  expect_no_error(
+    DBI::dbGetQuery(con, sprintf(
+      "SELECT count(*) FROM read_parquet('%s/**/*.parquet', file_row_number = true)",
+      out
+    ))
+  )
 })
