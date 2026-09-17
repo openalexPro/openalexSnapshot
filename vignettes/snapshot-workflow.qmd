@@ -65,7 +65,7 @@ The snapshot download is approximately 1.2 TB. The Parquet conversion adds anoth
 ```{r}
 install.packages(
   "openalexSnapshot",
-  repos = c("https://rkrug.r-universe.dev", "https://cloud.r-project.org")
+  repos = c("https://openalexpro.r-universe.dev", "https://cloud.r-project.org")
 )
 ```
 
@@ -105,90 +105,67 @@ Choose a location with sufficient disk space. All paths are derived from a singl
 
 ```
 <root_dir>/
-  snapshot/                   # downloaded .json.gz files (input)
-  parquet/                    # converted Parquet files (output)
+  parquet/                    # the snapshot, plus the indexes built over it
   openalex-snapshot_metadata/ # reports, logs, schema caches
 ```
 
 ## 2. Download the Snapshot
 
-The OpenAlex snapshot is hosted on Amazon S3 and updated regularly. Use `aws s3 sync` to download — it resumes interrupted downloads and only fetches new or changed files:
+OpenAlex publishes the snapshot **natively in Parquet**, so there is no
+conversion step: download it and you are ready to index. (Earlier releases of
+this package shipped a `snapshot_to_parquet()` that converted the old
+`.json.gz` distribution; it has been removed, because that path is dead.)
+
+The snapshot is hosted on Amazon S3 and updated regularly. `aws s3 sync`
+resumes interrupted downloads and only fetches new or changed files:
 
 ```bash
 aws s3 sync \
   s3://openalex \
-  /Volumes/external-drive/openalex/snapshot \
+  /Volumes/external-drive/openalex/parquet \
   --no-sign-request
 ```
 
-**Expected time**: 2–12 hours depending on your internet connection.
+**Expected time**: 2–12 hours depending on your connection.
 
-**Tip**: Monitor progress in another terminal:
+**Tip**: monitor progress in another terminal:
 
 ```bash
-watch -n 60 'du -sh /Volumes/external-drive/openalex/snapshot/*'
+watch -n 60 'du -sh /Volumes/external-drive/openalex/parquet/*'
 ```
 
 ### Snapshot Structure
 
-After download:
-
-```
-snapshot/
-├── RELEASE_NOTES.txt
-└── data/
-    ├── works/
-    │   └── updated_date=YYYY-MM-DD/
-    │       ├── part_000.json.gz
-    │       └── ...
-    ├── authors/
-    ├── institutions/
-    ├── sources/
-    ├── publishers/
-    ├── funders/
-    ├── topics/
-    ├── fields/
-    ├── subfields/
-    └── domains/
-```
-
-Each entity type contains gzipped newline-delimited JSON files partitioned by update date.
-
-## 3. Convert to Parquet Format
-
-The JSON snapshot is not efficient for analytical queries. Converting to Parquet provides:
-
-- **Columnar storage**: Read only the columns you need
-- **Compression**: Smaller files on disk
-- **Fast filtering**: Predicate pushdown for efficient queries
-- **Type safety**: Proper data types for each field
-
-```{r}
-library(openalexSnapshot)
-
-  root_dir      = "/Volumes/external-drive/openalex",
-  workers       = 4,
-  profile       = "balanced",   # "safe" | "balanced" | "fast"
-  memory_limit  = 15000         # MB
-)
-```
-
-**Expected time**: 2–8 hours depending on CPU and disk speed.
-
-### Parquet Structure
-
-After conversion, each entity directory contains one `.parquet` file per input `.gz` file:
+Each entity is a directory of Parquet files, hive-partitioned by update date:
 
 ```
 parquet/
 ├── works/
-│   ├── part_000.parquet
-│   ├── part_001.parquet
-│   └── ...
+│   └── updated_date=YYYY-MM-DD/
+│       ├── part_0000.parquet
+│       └── ...
 ├── authors/
 ├── institutions/
-└── ...
+├── sources/
+├── publishers/
+├── funders/
+└── topics/
 ```
+
+## 3. A note on size
+
+The works corpus is the bulk of it — on the order of 900 GB across ~2,000
+files, roughly 500 million records. Two consequences worth knowing before you
+start:
+
+- **Column projection is the main cost lever.** Works carry ~51 columns, many
+  of them deeply nested; `abstract` alone is over 10 GB. `lookup_by_id()` and
+  `get_citing()` both take `columns`, and naming only what you need changes
+  runtimes by an order of magnitude.
+- **Point the DuckDB spill directory at a fast local disk.** Spilling onto the
+  same external volume as the corpus was measured about 10x slower than onto
+  an internal SSD. The builders default `temp_dir` to `tempdir()` for this
+  reason; override it only if `tempdir()` is small or slow.
 
 ## 4. Build Search Indexes
 
@@ -202,7 +179,29 @@ build_corpus_index(
 )
 ```
 
-This creates `<root_dir>/parquet/<dataset>_id_idx.parquet` for each dataset. The index maps each OpenAlex ID to its physical location (file and row number) so that `lookup_by_id()` can retrieve specific records without scanning the full corpus.
+This creates `<root_dir>/parquet/<dataset>_id_idx/` for each dataset — a
+**partitioned directory**, not a single file, so a lookup opens only the
+blocks it needs. The index maps each OpenAlex ID to its physical location
+(file and row number) so `lookup_by_id()` can retrieve records without
+scanning the corpus.
+
+Two further indexes are optional but needed for the citation graph:
+
+```{r}
+# Who cites whom. This inverts `referenced_works`, and is what makes the
+# forward direction possible offline at all: `cited_by_api_url` is a URL.
+build_citation_index(
+  root_dir = "/Volumes/external-drive/openalex",
+  workers  = 8
+)
+
+# Only if you want to resolve DOIs without the API.
+build_doi_index(root_dir = "/Volumes/external-drive/openalex")
+```
+
+`build_citation_index()` is the expensive one — it materialises roughly three
+billion edges — and it is resumable: completed batches are skipped on a
+re-run, so an interrupted build continues rather than restarting.
 
 # Using Your Local Corpus
 
@@ -319,4 +318,4 @@ mv /Volumes/external-drive/openalex/parquet \
 - [OpenAlex Snapshot Documentation](https://docs.openalex.org/download-all-data/openalex-snapshot)
 - [DuckDB Documentation](https://duckdb.org/docs/)
 - [Apache Parquet Format](https://parquet.apache.org/)
-- [openalexPro](https://rkrug.github.io/openalexPro) — API access and advanced workflows
+- [openalexPro](https://openalexpro.github.io/openalexPro) — API access and advanced workflows

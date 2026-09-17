@@ -7,14 +7,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **openalexSnapshot** is an R package for working with the [OpenAlex](https://openalex.org) bulk
 snapshot. It handles the large-scale, offline data pipeline:
 
-1. **`snapshot_to_parquet()`** — converts `.json.gz` snapshot files to Parquet (schema inference
-   + parallel conversion)
-2. **`build_corpus_index()`** — builds `<dataset>_id_idx/` ID-lookup indexes over the
-   Parquet corpus
-3. **`lookup_by_id()`** — extracts records by OpenAlex ID using the index
+**Indexes** (built once over the parquet corpus):
 
-These functions were split out of **openalexPro** (v0.10.0). Calling them in `openalexPro` raises
-an informative error pointing users here.
+1. **`build_corpus_index()`** — `<dataset>_id_idx/`, for record lookup by OpenAlex ID
+2. **`build_citation_index()`** — `works_cite_idx/`, the *inversion* of
+   `referenced_works`. This is what makes the forward direction possible at all:
+   `cited_by_api_url` is a URL and useless offline
+3. **`build_doi_index()`** — `works_doi_idx.parquet`, so DOIs resolve without the API
+
+**Lookup:**
+
+4. **`lookup_by_id()`** / **`lookup_by_doi()`** — extract records by ID or DOI,
+   with `columns` projection and `add_columns`
+5. **`get_citing()`** / **`get_cited()`** — the citation neighbourhood of one or
+   more keypapers. `keypaper` is vectorised and accepts OpenAlex ids (short or
+   long form) and DOIs (with or without a resolver), mixed freely
+6. **`doi_to_id()`** — DOI → OpenAlex ID, offline
+
+The indexing and lookup functions were split out of **openalexPro** (v0.10.0);
+calling them there raises an informative error pointing here.
 
 ## Architecture
 
@@ -45,6 +56,20 @@ snapshot natively in parquet, so JSON conversion is a dead path.
 
 `backend` survives only as an argument that raises an explanatory error on
 `"rust"`, so existing calls fail with a reason rather than "unused argument".
+
+### DuckDB connections
+
+Everything goes through `.oas_con()` (`R/utils_duckdb.R`): `preserve_insertion_order`, `memory_limit`, `threads`, `temp_directory`.
+
+**Every parallel worker needs its own `temp_dir`.** DuckDB's default is `.tmp` *relative to the working directory*, which all workers inherit; they then write colliding `duckdb_temp_storage_*.tmp` files and corrupt each other's spill. `build_citation_index()` has always guarded this; `lookup_by_id()` did not until 0.3.1, which is the bug to remember when adding a new parallel path.
+
+`preserve_insertion_order` is `FALSE` for throughput and `TRUE` only where a statement's `ORDER BY` must survive into the written parquet — the sorted index depends on it, and getting it backwards silently destroys sortedness with no error.
+
+### The `json` extension
+
+`referenced_works` is stored as JSON text in some corpora, and reading it needs `json_extract_string()`. `.oas_ensure_json()` runs `INSTALL json; LOAD json;` explicitly, called from the two places that detect JSON text (`.oas_refs_expr()` and `get_cited()`).
+
+Do not rely on autoloading: `autoinstall_known_extensions` defaults to **FALSE**, so autoloading can only load an extension that is already installed, never fetch one. It therefore works on a developer machine and fails on every fresh CI runner. A corpus whose `referenced_works` is a native list needs no extension at all.
 
 ## Common Commands
 
