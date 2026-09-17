@@ -65,7 +65,7 @@ The snapshot download is approximately 1.2 TB. The Parquet conversion adds anoth
 ```{r}
 install.packages(
   "openalexSnapshot",
-  repos = c("https://rkrug.r-universe.dev", "https://cloud.r-project.org")
+  repos = c("https://openalexpro.r-universe.dev", "https://cloud.r-project.org")
 )
 ```
 
@@ -318,4 +318,4 @@ mv /Volumes/external-drive/openalex/parquet \
 - [OpenAlex Snapshot Documentation](https://docs.openalex.org/download-all-data/openalex-snapshot)
 - [DuckDB Documentation](https://duckdb.org/docs/)
 - [Apache Parquet Format](https://parquet.apache.org/)
-- [openalexPro](https://rkrug.github.io/openalexPro) — API access and advanced workflows
+- [openalexPro](https://openalexpro.github.io/openalexPro) — API access and advanced workflows

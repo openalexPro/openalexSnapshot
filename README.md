@@ -8,7 +8,7 @@
 # openalexSnapshot
 
 <!-- badges: start -->
-[![r-universe](https://rkrug.r-universe.dev/badges/openalexSnapshot)](https://rkrug.r-universe.dev/openalexSnapshot)
+[![r-universe](https://openalexpro.r-universe.dev/badges/openalexSnapshot)](https://openalexpro.r-universe.dev/openalexSnapshot)
 <!-- badges: end -->
 
 `openalexSnapshot` converts the [OpenAlex bulk
@@ -28,7 +28,7 @@ Linux — no Rust toolchain required):
 ``` r
 install.packages(
   "openalexSnapshot",
-  repos = c("https://rkrug.r-universe.dev", "https://cloud.r-project.org")
+  repos = c("https://openalexpro.r-universe.dev", "https://cloud.r-project.org")
 )
 ```
 
