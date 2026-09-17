@@ -364,3 +364,33 @@ test_that("get_citing and get_cited expose temp_dir", {
   expect_true("temp_dir" %in% names(formals(get_citing)))
   expect_true("temp_dir" %in% names(formals(get_cited)))
 })
+
+test_that("lookup_by_id(output=) writes the same schema it returns", {
+  # The COPY path used to keep the synthetic `file_row_number` column while
+  # the in-memory path stripped it, so the two disagreed -- and any reader
+  # that itself asked for file_row_number could not open the result at all.
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  idx <- build_corpus_index(corpus_dir = corpus, backend = "r", verbose = FALSE)
+  ids <- tiny_ids()[1:3]
+
+  in_mem <- lookup_by_id(ids = ids, index_file = idx, backend = "r",
+                         verbose = FALSE)
+  out <- file.path(tmp, "written")
+  lookup_by_id(ids = ids, index_file = idx, backend = "r", output = out,
+               verbose = FALSE)
+  written <- arrow::open_dataset(out) |> dplyr::collect()
+
+  expect_false("file_row_number" %in% names(written))
+  expect_setequal(names(written), names(in_mem))
+
+  # and the written output must be re-readable with file_row_number = true
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  expect_no_error(
+    DBI::dbGetQuery(con, sprintf(
+      "SELECT count(*) FROM read_parquet('%s/**/*.parquet', file_row_number = true)",
+      out
+    ))
+  )
+})

@@ -71,8 +71,14 @@
   }
 
   # SELECT list: projection + constant columns --------------------------------
+  # `file_row_number = true` adds a synthetic column that `*` would pick up.
+  # It is an index artefact: the in-memory path stripped it afterwards, but
+  # the COPY path wrote it into the parquet, so `output=` and the returned
+  # data frame had different schemas -- and a downstream reader that also
+  # asks for file_row_number then fails outright ("Using file_row_number
+  # option on file with column named file_row_number is not supported").
   sel <- if (is.null(columns)) {
-    "*"
+    "* EXCLUDE (file_row_number)"
   } else {
     paste(sprintf('"%s"', gsub('"', '""', columns, fixed = TRUE)), collapse = ", ")
   }
@@ -159,6 +165,7 @@
   }
 
   result <- do.call(rbind, results)
+  # Defensive: the SELECT list already excludes it.
   if ("file_row_number" %in% names(result)) result$file_row_number <- NULL
   if (isTRUE(verbose)) message("Retrieved ", nrow(result), " records")
   result
