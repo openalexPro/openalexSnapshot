@@ -226,9 +226,10 @@ test_that("every public function is actually exported in NAMESPACE", {
   # devtools::load_all() exposes unexported objects, so the rest of the suite
   # cannot catch a lost @export tag -- and one was lost this way, leaving
   # build_corpus_index() invisible to library() while all tests still passed.
-  # Read NAMESPACE directly rather than asking the loaded namespace.
-  ns <- readLines(testthat::test_path("..", "..", "NAMESPACE"), warn = FALSE)
-  exported <- sub("^export\\((.*)\\)$", "\\1", grep("^export\\(", ns, value = TRUE))
+  # getNamespaceExports() answers the question library() would ask. (Reading
+  # NAMESPACE from the source tree does not survive R CMD check, which runs
+  # the tests from an installed copy with no source layout around them.)
+  exported <- getNamespaceExports("openalexSnapshot")
   expect_setequal(
     exported,
     c("build_citation_index", "build_corpus_index", "build_doi_index",

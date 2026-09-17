@@ -34,8 +34,7 @@
 #'   `"r"` both use the pure-R/DuckDB implementation. `"rust"` uses the
 #'   compiled library and is **deprecated**: it writes an unsorted index and
 #'   supports neither `columns` nor `add_columns`. It will be removed in a
-#'   future release. `snapshot_to_parquet()` is unaffected and remains
-#'   Rust-only. `"auto"` (the default) uses the
+#'   future release. `"auto"` (the default) uses the
 #'   compiled Rust library when it is loaded and the pure-R/DuckDB
 #'   implementation otherwise. `"r"` forces pure R and is always available.
 #'   `"rust"` forces the compiled path and errors if it is not loaded.
@@ -65,8 +64,7 @@
 #'   records.
 #' * `root_dir` mode: invisibly returns `project_dir`.
 #'
-#' @seealso [build_corpus_index()] for building the required index,
-#'   [snapshot_to_parquet()] for creating the Parquet corpus.
+#' @seealso [build_corpus_index()] for building the required index.
 #'
 #' @importFrom arrow open_dataset
 #' @importFrom dplyr collect

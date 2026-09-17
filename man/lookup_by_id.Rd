@@ -64,8 +64,7 @@ removed in 0.1.0; the package is pure R. \code{"auto"} (the default) and
 \code{"r"} both use the pure-R/DuckDB implementation. \code{"rust"} uses the
 compiled library and is \strong{deprecated}: it writes an unsorted index and
 supports neither \code{columns} nor \code{add_columns}. It will be removed in a
-future release. \code{snapshot_to_parquet()} is unaffected and remains
-Rust-only. \code{"auto"} (the default) uses the
+future release. \code{"auto"} (the default) uses the
 compiled Rust library when it is loaded and the pure-R/DuckDB
 implementation otherwise. \code{"r"} forces pure R and is always available.
 \code{"rust"} forces the compiled path and errors if it is not loaded.}
@@ -133,6 +132,5 @@ lookup_by_id(
 
 }
 \seealso{
-\code{\link[=build_corpus_index]{build_corpus_index()}} for building the required index,
-\code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}} for creating the Parquet corpus.
+\code{\link[=build_corpus_index]{build_corpus_index()}} for building the required index.
 }
