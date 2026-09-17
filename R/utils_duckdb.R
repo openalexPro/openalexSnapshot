@@ -318,6 +318,48 @@
 #' @param alias Table alias to qualify the column with.
 #' @return List with `expr` (SQL yielding `VARCHAR[]`) and `enc`.
 #' @noRd
+#' Make DuckDB's `json` extension available on this connection
+#'
+#' Called only when the corpus stores `referenced_works` as JSON text, which
+#' is the one thing here that needs the extension -- a native-list corpus
+#' needs nothing.
+#'
+#' DuckDB can autoload extensions on demand, but autoinstall is not always
+#' enabled and the download needs network access, so on a CI runner the first
+#' `json_extract_string()` fails with "Extension Autoloading Error ... not
+#' found". An explicit `INSTALL` does work there. Installing an extension that
+#' is already present is a cheap no-op, so this is safe to call per
+#' connection.
+#'
+#' @param con A DuckDB connection.
+#' @return `TRUE`, invisibly; errors with an actionable message otherwise.
+#' @noRd
+.oas_ensure_json <- function(con) {
+  status <- tryCatch(
+    {
+      DBI::dbExecute(con, "INSTALL json")
+      DBI::dbExecute(con, "LOAD json")
+      TRUE
+    },
+    error = function(e) conditionMessage(e)
+  )
+  if (!isTRUE(status)) {
+    stop(
+      "This corpus stores `referenced_works` as JSON text, which needs ",
+      "DuckDB's `json` extension. It could not be loaded:\n  ",
+      sub("\n.*", "", status), "\n\n",
+      "Install it once on this machine, in any R session with network ",
+      "access:\n",
+      "  con <- DBI::dbConnect(duckdb::duckdb())\n",
+      "  DBI::dbExecute(con, \"INSTALL json\")\n\n",
+      "A corpus whose `referenced_works` is a native list needs no ",
+      "extension at all.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 .oas_refs_expr <- function(con, files, alias = "w") {
   probe <- unique(c(files[1L], files[length(files)]))
   encs <- vapply(probe, function(f) {
@@ -347,6 +389,7 @@
   expr <- if (enc == "native_list") {
     paste0(alias, ".referenced_works")
   } else {
+    .oas_ensure_json(con)
     paste0("json_extract_string(", alias, ".referenced_works, '$[*]')")
   }
   list(expr = expr, enc = enc)

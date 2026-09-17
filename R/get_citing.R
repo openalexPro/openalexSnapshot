@@ -175,6 +175,7 @@ get_cited <- function(keypaper,
   refs <- if (grepl("\\[\\]$", ty)) {
     "w.referenced_works"
   } else {
+    .oas_ensure_json(con)
     "json_extract_string(w.referenced_works, '$[*]')"
   }
 

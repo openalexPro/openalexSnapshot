@@ -395,3 +395,52 @@ test_that("lookup_by_id(output=) writes the same schema it returns", {
     ))
   )
 })
+
+test_that(".oas_ensure_json loads the json extension explicitly", {
+  # DuckDB's autoinstall_known_extensions defaults to FALSE, so a machine
+  # that has never installed `json` cannot autoload it: the first
+  # json_extract_string() dies with "Extension Autoloading Error ... not
+  # found". That is what broke every CI job here while passing locally,
+  # where the extension is already cached. An explicit INSTALL works in
+  # both places.
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  .oas_ensure_json(con)
+
+  loaded <- DBI::dbGetQuery(
+    con, "SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'json'"
+  )$loaded
+  expect_true(isTRUE(loaded[[1L]]))
+  expect_equal(
+    DBI::dbGetQuery(
+      con, "SELECT len(json_extract_string('[\"a\",\"b\"]', '$[*]')) AS n"
+    )$n[[1L]],
+    2L
+  )
+})
+
+test_that("a JSON-text corpus loads json before using json_extract_string", {
+  # .oas_refs_expr() is where the package decides it needs the extension, so
+  # that is where it must be ensured. A native-list corpus must not pay for
+  # it at all.
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  # make_tiny_corpus() returns the works dataset directory itself.
+  files <- list.files(corpus, pattern = "[.]parquet$",
+                      recursive = TRUE, full.names = TRUE)
+  expect_gt(length(files), 0L)
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  re <- .oas_refs_expr(con, files)
+  expect_equal(re$enc, "json_varchar")
+
+  # The returned expression must actually evaluate on this connection.
+  n <- DBI::dbGetQuery(con, paste0(
+    "SELECT count(*) AS n FROM read_parquet(", .oas_sql_str(.oas_fwd(files[1L])),
+    ") AS w, LATERAL UNNEST(", re$expr, ") AS r(ref) ",
+    "WHERE w.referenced_works IS NOT NULL"
+  ))$n[[1L]]
+  expect_gt(n, 0L)
+})

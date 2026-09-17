@@ -1,3 +1,31 @@
+# openalexSnapshot 0.3.1
+
+## Bug fix: the `json` extension is now installed explicitly
+
+Every CI job failed -- and would fail on any machine that had not already
+used DuckDB's `json` extension -- with
+
+```
+Extension Autoloading Error: An error occurred while trying to
+automatically install the required extension 'json'
+```
+
+`referenced_works` is stored as JSON text in some corpora, and reading it
+uses `json_extract_string()`. The package relied on DuckDB autoloading the
+extension on demand, but `autoinstall_known_extensions` defaults to **FALSE**,
+so autoloading can only succeed where the extension happens to already be
+installed. It is, on a developer machine that has used it before; it is not,
+on a fresh runner. That is why the suite passed locally and failed everywhere
+else. (openalexPro has always run `INSTALL json` explicitly, which is why its
+CI was unaffected.)
+
+New internal `.oas_ensure_json()` runs `INSTALL json; LOAD json;` and is
+called from the two places that decide JSON text is in play --
+`.oas_refs_expr()` and `get_cited()`'s reference unnesting -- so a corpus
+whose `referenced_works` is a native list still needs no extension at all.
+If the install fails, the error now says what is missing and how to install
+it, rather than surfacing DuckDB's autoload message.
+
 # openalexSnapshot 0.3.0
 
 ## Bug fix: parallel lookup workers shared one spill directory

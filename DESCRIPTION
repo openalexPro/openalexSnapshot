@@ -1,6 +1,6 @@
 Package: openalexSnapshot
 Title: OpenAlex Bulk Snapshot Conversion, Indexing, and Record Extraction
-Version: 0.3.0
+Version: 0.3.1
 Author: Rainer M Krug
 Maintainer: Rainer M Krug <Rainer@krugs.de>
 Description: Provides tools for working with the OpenAlex bulk snapshot:
