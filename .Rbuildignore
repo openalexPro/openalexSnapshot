@@ -3,6 +3,4 @@
 ^\.github$
 ^CLAUDE\.md$
 ^TODO\.md$
-^src/rust/target$
-^src/\.cargo$
 ^vignettes$

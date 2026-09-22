@@ -6,13 +6,15 @@
 \alias{openalexSnapshot-package}
 \title{openalexSnapshot: OpenAlex Bulk Snapshot Conversion, Indexing, and Record Extraction}
 \description{
-Provides tools for working with the OpenAlex bulk snapshot: converting .json.gz files to Parquet format, building ID-lookup indexes over the resulting corpus, and extracting records by OpenAlex ID. Large-scale operations delegate to a compiled Rust back-end (openalex-core via extendr); a pure-R/DuckDB fallback is included for environments without a Rust toolchain.
+Provides tools for working with the OpenAlex bulk snapshot: converting .json.gz files to Parquet format, building ID, DOI and inverted-citation indexes over the resulting corpus, and extracting records by OpenAlex ID or DOI. Also provides an offline view of the citation graph, so the works citing or cited by a given paper can be retrieved without network access. Indexing and extraction are implemented in R over DuckDB. The package is pure R: no compiled code, and no Rust toolchain is needed to install it.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/rkrug/openalexSnapshot}
-  \item Report bugs at \url{https://github.com/rkrug/openalexSnapshot/issues}
+  \item \url{https://github.com/openalexPro/openalexSnapshot}
+  \item \url{https://openalexpro.github.io/openalexSnapshot/}
+  \item \doi{10.5281/zenodo.20448992}
+  \item Report bugs at \url{https://github.com/openalexPro/openalexSnapshot/issues}
 }
 
 }

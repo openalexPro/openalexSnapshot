@@ -8,7 +8,7 @@
 # openalexSnapshot
 
 <!-- badges: start -->
-[![r-universe](https://rkrug.r-universe.dev/badges/openalexSnapshot)](https://rkrug.r-universe.dev/openalexSnapshot)
+[![r-universe](https://openalexpro.r-universe.dev/badges/openalexSnapshot)](https://openalexpro.r-universe.dev/openalexSnapshot)
 <!-- badges: end -->
 
 `openalexSnapshot` converts the [OpenAlex bulk
@@ -28,7 +28,7 @@ Linux — no Rust toolchain required):
 ``` r
 install.packages(
   "openalexSnapshot",
-  repos = c("https://rkrug.r-universe.dev", "https://cloud.r-project.org")
+  repos = c("https://openalexpro.r-universe.dev", "https://cloud.r-project.org")
 )
 ```
 
@@ -54,31 +54,32 @@ library(openalexSnapshot)
 
 root <- "/Volumes/openalex"
 
-# 1. Convert the snapshot to Parquet
-snapshot_to_parquet(
-  root_dir     = root,
-  workers      = 4,
-  memory_limit = 15000   # MB
-)
+# OpenAlex now publishes the snapshot natively in Parquet, so there is no
+# JSON conversion step.
 
-# 2. Build ID indexes
+# 1. Build the ID index (record lookup)
 build_corpus_index(
   root_dir  = root,
   data_sets = "works",
   workers   = 4
 )
 
-# 3. Look up specific records by OpenAlex ID
-out_dir <- file.path(root, "my_extract")
-lookup_by_id(
-  index_file = file.path(root, "parquet", "works_id_idx.parquet"),
-  ids        = c("W2741809807", "W2100837269"),
-  output_dir = out_dir
+# 2. Build the citation index (who cites whom). This inverts
+#    referenced_works, which is what makes the forward direction possible
+#    offline -- cited_by_api_url is a URL and cannot be used.
+build_citation_index(root_dir = root, workers = 4)
+
+# 3. Look up records by OpenAlex ID. `columns` matters: works carry ~51
+#    columns of nested structs and extracting all of them dominates the run.
+works <- lookup_by_id(
+  root_dir = root,
+  ids      = c("W2741809807", "W2100837269"),
+  columns  = c("id", "doi", "title", "publication_year")
 )
 
-# 4. Read results
-library(arrow)
-works <- open_dataset(out_dir) |> collect()
+# 4. Walk the citation graph
+citing <- get_citing("W2741809807", root_dir = root)   # works citing it
+cited  <- get_cited("W2741809807",  root_dir = root)   # works it cites
 ```
 
 ## Documentation

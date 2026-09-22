@@ -1,14 +1,8 @@
 # Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
 # Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 #
-# Pre-compiled static libraries are downloaded by configure → tools/download_prebuilt.R
-# from the `prebuilt-libs` GitHub Release, cutting check time from ~40 min to ~2 min.
-# The Rust toolchain is kept as a fallback in case the download fails.
-#
-# Trigger the `build-libs` workflow manually after any Rust source change.
-#
-# Windows is excluded: bundled DuckDB cannot be compiled from source via Rust
-# on the MinGW toolchain; tracked as a future task.
+# The package is pure R, so there is nothing to compile and no prebuilt
+# libraries to fetch.
 on:
   push:
     branches: [main, dev]
@@ -39,20 +33,9 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
       NOT_CRAN: true
-      # Set to 'true' to skip the prebuilt download and compile from source.
-      OPENALEXSNAPSHOT_BUILD_FROM_SOURCE: false
 
     steps:
       - uses: actions/checkout@v4
-
-      # Rust is only needed if the prebuilt download fails (fallback path).
-      - name: Install Rust toolchain (fallback for prebuilt download failure)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust build artifacts (fallback only)
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src/rust
 
       - uses: r-lib/actions/setup-pandoc@v2
 

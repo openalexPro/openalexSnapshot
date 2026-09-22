@@ -1,6 +1,0 @@
-#!/usr/bin/env sh
-: "${R_HOME=`R RHOME`}"
-# Try to download a prebuilt static library; falls back silently if unavailable.
-"${R_HOME}/bin/Rscript" tools/download_prebuilt.R
-# Generate src/Makevars from src/Makevars.in (always runs).
-"${R_HOME}/bin/Rscript" tools/config.R

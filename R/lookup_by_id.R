@@ -9,7 +9,7 @@
 #'
 #' @param root_dir Root directory containing `parquet/` and the dataset indexes
 #'   produced by [build_corpus_index()]. Index files are expected at
-#'   `<root_dir>/parquet/<dataset>_id_idx.parquet`.
+#'   `<root_dir>/parquet/<dataset>_id_idx/`.
 #' @param ids Character vector of OpenAlex IDs to retrieve. Can be long form
 #'   (e.g. `"https://openalex.org/W2741809807"`) or short form
 #'   (e.g. `"W2741809807"`).
@@ -28,6 +28,31 @@
 #'   `project_dir` are ignored.
 #' @param selected Column selection passed to `arrow::open_dataset()`. Default
 #'   is `NULL` (all columns).
+#' @param backend Retained only so that existing calls passing
+#'   `backend = "rust"` get an explanatory error. The compiled backend was
+#'   removed in 0.1.0; the package is pure R. `"auto"` (the default) and
+#'   `"r"` both use the pure-R/DuckDB implementation. `"rust"` uses the
+#'   compiled library and is **deprecated**: it writes an unsorted index and
+#'   supports neither `columns` nor `add_columns`. It will be removed in a
+#'   future release. `"auto"` (the default) uses the
+#'   compiled Rust library when it is loaded and the pure-R/DuckDB
+#'   implementation otherwise. `"r"` forces pure R and is always available.
+#'   `"rust"` forces the compiled path and errors if it is not loaded.
+#' @param memory_limit DuckDB `memory_limit` for each worker. `NULL` (default)
+#'   leaves DuckDB's own, which is ~80% of system RAM *per worker*.
+#' @param temp_dir Root for DuckDB's spill files. `NULL` (default) uses a
+#'   private per-worker directory under [tempdir()]. Workers must not share
+#'   one: concurrent DuckDB instances write colliding
+#'   `duckdb_temp_storage_*.tmp` files and corrupt each other's spill.
+#' @param columns Character vector of columns to return. `NULL` (default)
+#'   returns all. Projection matters: reading 2 of 51 columns from a corpus of
+#'   nested structs is far cheaper than `SELECT *`. Requires
+#'   `backend = "r"` — the compiled path always reads every column.
+#' @param add_columns Named list of constant columns to add to every returned
+#'   row, e.g. `list(relation = "citing")`. Values are embedded as **SQL string
+#'   literals**, matching `openalexPro::pro_request_parquet()`, so a logical
+#'   must be passed as `"TRUE"` and cast by the caller. Requires
+#'   `backend = "r"`.
 #' @param output Path to an output directory for writing results as Parquet
 #'   files when using `index_file` mode. If `NULL` (default), results are
 #'   returned as a data frame. Ignored when `root_dir` is used (use
@@ -39,8 +64,7 @@
 #'   records.
 #' * `root_dir` mode: invisibly returns `project_dir`.
 #'
-#' @seealso [build_corpus_index()] for building the required index,
-#'   [snapshot_to_parquet()] for creating the Parquet corpus.
+#' @seealso [build_corpus_index()] for building the required index.
 #'
 #' @importFrom arrow open_dataset
 #' @importFrom dplyr collect
@@ -81,49 +105,37 @@ lookup_by_id <- function(
   verbose     = TRUE,
   index_file  = NULL,
   selected    = NULL,
-  output      = NULL
+  output      = NULL,
+  backend     = c("auto", "r", "rust"),
+  columns     = NULL,
+  add_columns = NULL,
+  memory_limit = NULL,
+  temp_dir    = NULL
 ) {
   if (missing(ids) || length(ids) == 0L) {
     stop("'ids' must be provided and non-empty.", call. = FALSE)
   }
 
-  workers_int <- as.integer(if (is.null(workers)) 1L else workers)
+  backend <- .oas_backend(backend)
+
+  lookup_one <- function(idx, out) {
+    .oas_lookup_one_index(
+      index_file = idx, ids = as.character(ids),
+      columns = columns, add_columns = add_columns,
+      selected = selected, workers = workers, output = out,
+      memory_limit = memory_limit, temp_dir = temp_dir,
+      verbose = isTRUE(verbose)
+    )
+  }
 
   # index_file mode ------------------------------------------------------------
   if (!is.null(index_file)) {
-    if (is.null(output)) {
-      # Write to a temp dir, read back as data frame, then clean up.
-      tmp_out <- tempfile(pattern = "oa_lookup_")
-      on.exit(unlink(tmp_out, recursive = TRUE, force = TRUE), add = TRUE)
-      oa_lookup_by_id(
-        index_file = index_file,
-        ids        = as.character(ids),
-        output     = tmp_out,
-        workers    = workers_int,
-        verbose    = isTRUE(verbose)
-      )
-      pq_files <- list.files(tmp_out, pattern = "\\.parquet$",
-                             full.names = TRUE, recursive = TRUE)
-      if (length(pq_files) == 0L) {
-        message("No matching records found.")
-        return(data.frame())
-      }
-      result <- arrow::open_dataset(tmp_out) |> dplyr::collect()
-      if ("file_row_number" %in% names(result)) {
-        result$file_row_number <- NULL
-      }
-      message("Retrieved ", nrow(result), " records")
-      return(result)
-    } else {
-      oa_lookup_by_id(
-        index_file = index_file,
-        ids        = as.character(ids),
-        output     = output,
-        workers    = workers_int,
-        verbose    = isTRUE(verbose)
-      )
-      return(invisible(output))
-    }
+    # The R implementation returns a data frame directly. The compiled backend
+    # could only write to disk, so this used to detour through a temp
+    # directory and read the parquet back; that is gone with it.
+    if (is.null(output)) return(lookup_one(index_file, NULL))
+    lookup_one(index_file, output)
+    return(invisible(output))
   }
 
   # root_dir mode --------------------------------------------------------------
@@ -134,7 +146,7 @@ lookup_by_id <- function(
     )
   }
 
-  parquet_root <- file.path(root_dir, "parquet")
+  parquet_root <- .oas_parquet_root(root_dir)
 
   if (is.null(data_sets)) {
     idx_files <- list.files(
@@ -159,7 +171,7 @@ lookup_by_id <- function(
   }
 
   for (ds in data_sets) {
-    idx_path <- file.path(parquet_root, paste0(ds, "_id_idx.parquet"))
+    idx_path <- file.path(parquet_root, paste0(ds, "_id_idx"))
     if (!file.exists(idx_path)) {
       if (isTRUE(verbose)) message("No index for dataset '", ds, "', skipping.")
       next
@@ -171,13 +183,7 @@ lookup_by_id <- function(
       stop("project_dir must be provided in root_dir mode.", call. = FALSE)
     }
 
-    oa_lookup_by_id(
-      index_file = idx_path,
-      ids        = as.character(ids),
-      output     = ds_output,
-      workers    = workers_int,
-      verbose    = isTRUE(verbose)
-    )
+    lookup_one(idx_path, ds_output)
   }
 
   invisible(project_dir)

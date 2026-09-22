@@ -5,7 +5,7 @@ template:
 
 home:
   title: "openalexSnapshot -- OpenAlex Bulk Snapshot Tools"
-  description: "Convert, index, and query the OpenAlex bulk snapshot using a Rust-backed R package."
+  description: "Index and query the OpenAlex Parquet snapshot, including an offline view of the citation graph."
 
 navbar:
   left:
@@ -17,8 +17,6 @@ navbar:
       menu:
         - text: "Snapshot Workflow"
           href: articles/snapshot-workflow.html
-        - text: "Snapshot Conversion"
-          href: articles/snapshot-conversion.html
     - text: "Reference"
       href: reference/index.html
     - text: "Changelog"
@@ -26,17 +24,20 @@ navbar:
 
 reference:
   - title: "Snapshot Processing"
-    desc: "High-level R wrappers for snapshot conversion, indexing, and record retrieval."
+    desc: "Building and querying ID indexes over a local Parquet corpus."
     contents:
-      - snapshot_to_parquet
       - build_corpus_index
       - lookup_by_id
-  - title: "Rust Back-end"
-    desc: "Direct wrappers around the compiled Rust functions. Called by the high-level functions above."
+  - title: "Offline Citation Graph"
+    desc: "Indexes and queries that make the citation graph available without network access."
     contents:
-      - oa_snapshot_to_parquet
-      - oa_build_corpus_index
-      - oa_lookup_by_id
+      - build_citation_index
+      - build_doi_index
+      - get_citing
+      - get_cited
+      - doi_to_id
+      - lookup_by_doi
+
   - title: "Package"
     contents:
       - openalexSnapshot-package

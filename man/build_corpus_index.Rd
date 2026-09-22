@@ -9,15 +9,19 @@ build_corpus_index(
   data_sets = NULL,
   workers = NULL,
   memory_limit = NULL,
+  temp_dir = NULL,
+  batch_bytes = 1e+09,
+  block_size = NULL,
   overwrite = FALSE,
   verbose = TRUE,
-  corpus_dir = NULL
+  corpus_dir = NULL,
+  backend = c("auto", "r", "rust")
 )
 }
 \arguments{
 \item{root_dir}{Root directory containing a \verb{parquet/} subdirectory produced
-by \code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}}. If provided, the index for each dataset in
-\code{data_sets} is created at \verb{<root_dir>/parquet/<dataset>_id_idx.parquet}.}
+by the snapshot conversion pipeline. If provided, the index for each dataset in
+\code{data_sets} is created at \verb{<root_dir>/parquet/<dataset>_id_idx/}.}
 
 \item{data_sets}{Character vector of dataset names to index (e.g.
 \code{c("works", "authors")}). \code{NULL} indexes all datasets found under
@@ -28,6 +32,27 @@ by \code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}}. If provided, the i
 
 \item{memory_limit}{DuckDB memory limit (e.g., \code{"20GB"}). Default is \code{NULL}.}
 
+\item{temp_dir}{Directory for Stage-1 shards and DuckDB spill. Defaults to a
+subdirectory of \code{\link[=tempdir]{tempdir()}}, which is on local disk.
+
+The default matters. Spilling beside the index puts those writes on the
+same device the corpus is being read from, and on an external USB SSD that
+measured \strong{8.18 s/batch versus 0.76 s/batch} -- a 10.8x difference from
+this setting alone. Override it only to point at a \emph{different} fast disk,
+or if the default lacks room: peak usage is roughly the size of the
+finished index plus its transient shards.}
+
+\item{batch_bytes}{Approximate bytes of source parquet per Stage-1 batch.}
+
+\item{block_size}{Width of an \code{id_block}. \code{NULL} (default) derives one from
+the actual id range so the index lands near 300 blocks.
+
+A fixed width does not suit every dataset, because entity id ranges differ
+by orders of magnitude. At \code{1e7}, works gives 351 useful blocks but
+authors gives only \strong{14} -- their ids cluster tightly around 5.0-5.1e9,
+so 113 million rows would land in 14 partitions of ~8 M rows and prune
+almost nothing. Pass a value explicitly to override.}
+
 \item{overwrite}{If \code{TRUE}, rebuilds existing indexes. Default is \code{FALSE}
 (skip if the index already exists).}
 
@@ -35,16 +60,28 @@ by \code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}}. If provided, the i
 
 \item{corpus_dir}{Explicit path to a single dataset Parquet directory (e.g.
 \code{"/Volumes/openalex/parquet/works"}). The index is written as a sibling
-file: \verb{<parent>/<basename>_id_idx.parquet}. When this is provided,
+directory: \verb{<parent>/<basename>_id_idx/}. When this is provided,
 \code{root_dir} and \code{data_sets} are ignored.}
+
+\item{backend}{Retained only so that existing calls passing
+\code{backend = "rust"} get an explanatory error. The compiled backend was
+removed in 0.1.0; the package is pure R. \code{"auto"} (the default) and
+\code{"r"} both use the pure-R/DuckDB implementation. \code{"rust"} uses the
+compiled library and is \strong{deprecated}: it writes an unsorted index and
+supports neither \code{columns} nor \code{add_columns}. It will be removed in a
+future release. \code{"auto"} (the default) uses the
+compiled Rust library when it is loaded and the pure-R/DuckDB
+implementation otherwise, so behaviour is unchanged for an installed
+binary. \code{"r"} forces pure R and is always available. \code{"rust"} forces the
+compiled path and errors if it is not loaded.}
 }
 \value{
 When \code{corpus_dir} is provided, invisibly returns the path to the
 created index file. When \code{root_dir} is used, invisibly returns \code{root_dir}.
 }
 \description{
-Builds a \verb{<dataset>_id_idx.parquet} index from the Parquet corpus produced
-by \code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}}, enabling fast record retrieval by OpenAlex ID
+Builds a \verb{<dataset>_id_idx/} index from the Parquet corpus produced
+by the snapshot download and conversion pipeline, enabling fast record retrieval by OpenAlex ID
 using \code{\link[=lookup_by_id]{lookup_by_id()}}.
 }
 \details{
@@ -59,33 +96,27 @@ Paths can be supplied as a single \code{root_dir} (which iterates over all
 requested \code{data_sets}) or as an explicit \code{corpus_dir} pointing to a single
 dataset directory.
 
-The index contains columns:
-\describe{
-\item{id}{The OpenAlex ID}
-\item{id_block}{Block number computed as \code{floor(numeric_id / 10000)}}
-\item{parquet_file}{Relative path to the Parquet file in the corpus}
-\item{file_row_number}{Row number within the file (0-indexed)}
-}
-}
-\examples{
-\dontrun{
-build_corpus_index(root_dir = "/Volumes/openalex")
+A hive-partitioned directory, not a single file:
 
-build_corpus_index(
-  root_dir  = "/Volumes/openalex",
-  data_sets = "works",
-  workers   = 4
-)
+\if{html}{\out{<div class="sourceCode">}}\preformatted{works_id_idx/
+  _index_meta.parquet
+  id_block=0/part-0.parquet
+  ...
+}\if{html}{\out{</div>}}
 
-# Single explicit directory:
-build_corpus_index(
-  corpus_dir   = "/Volumes/openalex/parquet/works",
-  memory_limit = "20GB"
-)
-}
+with \code{id_block = floor(numeric_id / block_size)}, each part sorted by \code{id},
+holding \code{id} (long form), \code{parquet_file} (relative to the parquet root) and
+\code{file_row_number} (0-indexed).
 
+A single file measured 3,992 row groups whose footer cost 0.192 s to parse
+before reading any data, on every query, and needed a global sort of 492M
+rows to build. Partitioning removes both: blocks sort independently, and a
+lookup opens only the blocks its ids fall in.
+
+\verb{_index_meta.parquet} is written last; its presence marks the index
+complete, and it records the \code{block_size} the query side must recompute.
 }
 \seealso{
-\code{\link[=snapshot_to_parquet]{snapshot_to_parquet()}} for creating the Parquet corpus,
-\code{\link[=lookup_by_id]{lookup_by_id()}} for ID-based record retrieval.
+\code{\link[=lookup_by_id]{lookup_by_id()}} for ID-based record retrieval,
+\code{\link[=build_citation_index]{build_citation_index()}} and \code{\link[=build_doi_index]{build_doi_index()}}.
 }
