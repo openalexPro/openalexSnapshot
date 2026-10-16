@@ -416,7 +416,7 @@
 .oas_read_index_meta <- function(path) {
   f <- file.path(path, "_index_meta.parquet")
   if (!file.exists(f)) return(NULL)
-  as.data.frame(arrow::read_parquet(f, mmap = FALSE))
+  as.data.frame(arrow::read_parquet(f))
 }
 
 #' Assert that an index exists and is complete
