@@ -407,11 +407,16 @@
 }
 
 #' Read an index metadata sidecar
+#'
+#' `mmap = FALSE` is load-bearing on Windows: arrow memory-maps by default and
+#' holds the mapping, so a later rewrite of the same sidecar -- rebuilding an
+#' index in a session that has already queried it -- fails with
+#' `[Windows error 1224] ... a file with a user-mapped section open`.
 #' @noRd
 .oas_read_index_meta <- function(path) {
   f <- file.path(path, "_index_meta.parquet")
   if (!file.exists(f)) return(NULL)
-  as.data.frame(arrow::read_parquet(f))
+  as.data.frame(arrow::read_parquet(f, mmap = FALSE))
 }
 
 #' Assert that an index exists and is complete
