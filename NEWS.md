@@ -1,3 +1,23 @@
+# openalexSnapshot 0.3.2
+
+## Bug fix: rewriting an index sidecar no longer fails on Windows
+
+`.oas_read_index_meta()` read `_index_meta.parquet` with arrow's default
+`mmap = TRUE`, which keeps the file memory-mapped for the rest of the
+session. Windows then refuses any write to that path:
+
+```
+IOError: Failed to open local file '.../works_cite_idx/_index_meta.parquet'.
+Detail: [Windows error 1224] The requested operation cannot be performed on
+a file with a user-mapped section open.
+```
+
+So rebuilding a citation or corpus index in an R session that had already
+queried it -- `get_citing()` or `lookup_by_id()` read the sidecar -- failed
+on Windows and worked everywhere else. The sidecar is now read with
+`mmap = FALSE`. This is the same defect, and the same fix, as the
+`_snowball_run.parquet` manifest in openalexSnowball 0.15.0.
+
 # openalexSnapshot 0.3.1
 
 ## Bug fix: the `json` extension is now installed explicitly
