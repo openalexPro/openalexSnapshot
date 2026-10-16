@@ -25,9 +25,14 @@ jobs:
       fail-fast: false
       matrix:
         config:
+          # Windows is not redundant here: arrow memory-maps files and
+          # Windows refuses to write one that has a mapping open, so
+          # mmap bugs are invisible on Linux and macOS:
+          # 0.3.1 shipped broken because only r-universe tested Windows.
           - {os: ubuntu-latest, r: 'release'}
           - {os: ubuntu-latest, r: 'oldrel-1'}
           - {os: macos-latest,  r: 'release'}
+          - {os: windows-latest, r: 'release'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
