@@ -12,7 +12,9 @@
 #'   `<root_dir>/parquet/<dataset>_id_idx/`.
 #' @param ids Character vector of OpenAlex IDs to retrieve. Can be long form
 #'   (e.g. `"https://openalex.org/W2741809807"`) or short form
-#'   (e.g. `"W2741809807"`).
+#'   (e.g. `"W2741809807"`). Duplicates are dropped: each id is returned at
+#'   most once. If the index holds an id in more than one source file, the
+#'   record from the latest `updated_date=` partition is kept.
 #' @param project_dir Project output directory. Extracted Parquet files are
 #'   written to `<project_dir>/snapshot_extract_<dataset>/`. Only used when
 #'   `root_dir` is provided.
@@ -56,7 +58,8 @@
 #' @param output Path to an output directory for writing results as Parquet
 #'   files when using `index_file` mode. If `NULL` (default), results are
 #'   returned as a data frame. Ignored when `root_dir` is used (use
-#'   `project_dir` instead).
+#'   `project_dir` instead). Each source file is written to its own part,
+#'   and a file that fails to read or write is an error, not a warning.
 #'
 #' @return
 #' * `index_file` mode, `output` not `NULL`: invisibly returns `output`.
