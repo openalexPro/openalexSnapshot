@@ -29,7 +29,9 @@ produced by \code{\link[=build_corpus_index]{build_corpus_index()}}. Index files
 
 \item{ids}{Character vector of OpenAlex IDs to retrieve. Can be long form
 (e.g. \code{"https://openalex.org/W2741809807"}) or short form
-(e.g. \code{"W2741809807"}).}
+(e.g. \code{"W2741809807"}). Duplicates are dropped: each id is returned at
+most once. If the index holds an id in more than one source file, the
+record from the latest \verb{updated_date=} partition is kept.}
 
 \item{project_dir}{Project output directory. Extracted Parquet files are
 written to \verb{<project_dir>/snapshot_extract_<dataset>/}. Only used when
@@ -56,7 +58,8 @@ is \code{NULL} (all columns).}
 \item{output}{Path to an output directory for writing results as Parquet
 files when using \code{index_file} mode. If \code{NULL} (default), results are
 returned as a data frame. Ignored when \code{root_dir} is used (use
-\code{project_dir} instead).}
+\code{project_dir} instead). Each source file is written to its own part,
+and a file that fails to read or write is an error, not a warning.}
 
 \item{backend}{Retained only so that existing calls passing
 \code{backend = "rust"} get an explanatory error. The compiled backend was
@@ -72,7 +75,7 @@ implementation otherwise. \code{"r"} forces pure R and is always available.
 \item{columns}{Character vector of columns to return. \code{NULL} (default)
 returns all. Projection matters: reading 2 of 51 columns from a corpus of
 nested structs is far cheaper than \verb{SELECT *}. Requires
-\code{backend = "r"} — the compiled path always reads every column.}
+\code{backend = "r"} - the compiled path always reads every column.}
 
 \item{add_columns}{Named list of constant columns to add to every returned
 row, e.g. \code{list(relation = "citing")}. Values are embedded as \strong{SQL string

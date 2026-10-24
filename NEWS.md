@@ -1,3 +1,32 @@
+# openalexSnapshot 0.3.3
+
+## Bug fix: `lookup_by_id(output = )` lost most records
+
+Output parts were named after the source file's basename, but every
+`updated_date=...` folder reuses `part_0000.parquet`, `part_0001.parquet`, ...
+A works extract from 1,835 source files therefore had only 160 output names:
+parallel writers overwrote or lock-blocked each other, and an extract of about
+7.4 million works kept 1.4 million. Parts (and worker spill directories) are
+now named by the path relative to the parquet root.
+
+Failed reads and writes were turned into warnings, so the call still
+reported success. They are now errors.
+
+## `lookup_by_id()` returns each id once
+
+Input `ids` are de-duplicated, and if the index holds an id in several source
+files, only the record from the latest `updated_date=` partition is kept.
+
+## Bug fix: parallel lookup of a large id set exceeded `future.globals.maxSize`
+
+The worker closure carried the full set of index matches with it (about
+1 GiB for 7.4 million ids). It now carries only what the workers need.
+
+## Source comments are ASCII-only
+
+Three em dashes in `R/` comments caused `getSrcLines()` translation warnings
+in a US-ASCII locale.
+
 # openalexSnapshot 0.3.2
 
 ## Bug fix: rewriting an index sidecar no longer fails on Windows

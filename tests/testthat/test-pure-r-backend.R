@@ -444,3 +444,57 @@ test_that("a JSON-text corpus loads json before using json_extract_string", {
   ))$n[[1L]]
   expect_gt(n, 0L)
 })
+
+# Split the tiny corpus across two updated_date partitions that both use the
+# file name part_0000.parquet, as the real snapshot does. `dup` copies that
+# many rows into both partitions, with the newer one marked by title.
+split_tiny_corpus <- function(corpus, dup = 0L) {
+  old <- file.path(corpus, "updated_date=2020-01-01", "part_0000.parquet")
+  # mmap = FALSE: a mapped file cannot be overwritten on Windows (error 1224)
+  df <- arrow::read_parquet(old, mmap = FALSE)
+  half <- seq_len(nrow(df) / 2)
+  newer <- df[c(setdiff(seq_len(nrow(df)), half), seq_len(dup)), ]
+  newer$title[seq_len(dup) + nrow(df) - length(half)] <- "newer"
+  dir.create(file.path(corpus, "updated_date=2021-01-01"))
+  arrow::write_parquet(df[half, ], old)
+  arrow::write_parquet(newer, file.path(corpus, "updated_date=2021-01-01",
+                                        "part_0000.parquet"))
+  corpus
+}
+
+test_that("lookup_by_id(output=) keeps files that share a basename apart", {
+  # Every updated_date=... folder reuses part_0000.parquet, ...; naming output
+  # parts by basename() alone made them overwrite each other and the extract
+  # silently lost most of its records.
+  tmp <- withr::local_tempdir()
+  corpus <- split_tiny_corpus(make_tiny_corpus(tmp))
+  idx <- build_corpus_index(corpus_dir = corpus, backend = "r", verbose = FALSE)
+  out <- file.path(tmp, "extract")
+
+  lookup_by_id(ids = tiny_ids(), index_file = idx, backend = "r",
+               output = out, verbose = FALSE)
+  expect_length(list.files(out, pattern = "\\.parquet$"), 2L)
+  expect_equal(nrow(dplyr::collect(arrow::open_dataset(out))),
+               length(tiny_ids()))
+})
+
+test_that("lookup_by_id() returns each id once", {
+  tmp <- withr::local_tempdir()
+  corpus <- split_tiny_corpus(make_tiny_corpus(tmp), dup = 2L)
+  idx <- build_corpus_index(corpus_dir = corpus, backend = "r", verbose = FALSE)
+  ids <- c(tiny_ids(), tiny_ids()[1:3])   # duplicated input ids as well
+
+  res <- lookup_by_id(ids = ids, index_file = idx, backend = "r",
+                      verbose = FALSE)
+  expect_equal(nrow(res), length(tiny_ids()))
+  expect_false(anyDuplicated(res$id) > 0)
+  # an id held in both partitions comes from the latest one
+  expect_equal(res$title[endsWith(res$id, tiny_ids()[[1]])], "newer")
+
+  out <- file.path(tmp, "extract")
+  lookup_by_id(ids = ids, index_file = idx, backend = "r", output = out,
+               verbose = FALSE)
+  written <- dplyr::collect(arrow::open_dataset(out))
+  expect_equal(nrow(written), length(tiny_ids()))
+  expect_false(anyDuplicated(written$id) > 0)
+})
