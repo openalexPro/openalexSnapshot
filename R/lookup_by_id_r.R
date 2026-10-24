@@ -35,7 +35,7 @@
     stop("Output directory already exists: ", output, call. = FALSE)
   }
 
-  ids <- .oas_normalize_id(ids)
+  ids <- unique(.oas_normalize_id(ids))
   if (isTRUE(verbose)) message("Looking up ", length(ids), " ids ...")
 
   # Build the partition file list in R rather than globbing the whole index.
@@ -60,6 +60,17 @@
     if (isTRUE(verbose)) message("No matching records found in index")
     if (!is.null(output)) return(invisible(output))
     return(data.frame())
+  }
+  # One record per id. If the index holds an id in several source files
+  # (e.g. a work present in more than one updated_date=... partition), keep
+  # the one from the latest partition: ISO dates sort as strings.
+  matches <- matches[order(matches$parquet_file, decreasing = TRUE), ]
+  dup <- duplicated(matches$id)
+  if (any(dup)) {
+    if (isTRUE(verbose)) {
+      message("Dropping ", sum(dup), " duplicate index entries (kept latest)")
+    }
+    matches <- matches[!dup, ]
   }
   if (isTRUE(verbose)) {
     message("Found ", nrow(matches), " matching records in index")
@@ -98,6 +109,12 @@
   }
 
   file_chunks <- split(matches$file_row_number, matches$parquet_file)
+  # One name per source file for its output part and spill dir. basename()
+  # is not unique: every updated_date=... folder reuses part_0000.parquet,
+  # part_0001.parquet, ..., so 1,835 works files collapsed onto 160 names and
+  # the writers overwrote (or lock-blocked) each other. The path relative to
+  # the parquet root is unique.
+  file_keys <- gsub("[^A-Za-z0-9._-]", "_", names(file_chunks))
   names(file_chunks) <- .oas_fwd(file.path(snapshot_path, names(file_chunks)))
 
   if (isTRUE(verbose)) {
@@ -117,7 +134,9 @@
   progressr::with_progress(
     {
       p <- progressr::progressor(along = file_chunks)
-      results <- future.apply::future_lapply(names(file_chunks), function(pq) {
+      results <- future.apply::future_lapply(seq_along(file_chunks), function(i) {
+        pq   <- names(file_chunks)[[i]]
+        key  <- file_keys[[i]]
         rows <- paste(file_chunks[[pq]], collapse = ", ")
         # Each worker needs its OWN spill directory. DuckDB's default is
         # `.tmp` relative to the working directory, which every worker in the
@@ -126,7 +145,7 @@
         # build_citation_index() documents; it was missing here.
         wtmp <- file.path(
           temp_dir %||% file.path(tempdir(), "oas_lookup"),
-          gsub("[^A-Za-z0-9._-]", "_", basename(pq))
+          key
         )
         wcon <- .oas_con(memory_limit = memory_limit, temp_dir = wtmp,
                          threads = 1L)
@@ -138,24 +157,25 @@
           ", file_row_number = true, hive_partitioning = false) ",
           "WHERE file_row_number IN (", rows, ")"
         )
-        out <- if (!is.null(output)) {
-          of <- file.path(output, paste0("part_", basename(pq)))
-          tryCatch({
+        # A failed file is an error, not a warning: an extract missing whole
+        # source files is not a result, and a warning let callers (e.g. a
+        # targets pipeline) record it as complete.
+        out <- tryCatch(
+          if (!is.null(output)) {
+            of <- file.path(output, paste0("part_", key))
             DBI::dbExecute(wcon, paste0(
               "COPY (", body, ") TO ", .oas_sql_str(.oas_fwd(of)),
               " (FORMAT PARQUET, COMPRESSION SNAPPY)"
             ))
-            length(file_chunks[[pq]])
-          }, error = function(e) {
-            warning("Failed to write from ", pq, ": ", conditionMessage(e))
-            0L
-          })
-        } else {
-          tryCatch(DBI::dbGetQuery(wcon, body), error = function(e) {
-            warning("Failed to read from ", pq, ": ", conditionMessage(e))
-            data.frame()
-          })
-        }
+            length(file_chunks[[i]])
+          } else {
+            DBI::dbGetQuery(wcon, body)
+          },
+          error = function(e) {
+            stop("Failed to read from ", pq, ": ", conditionMessage(e),
+                 call. = FALSE)
+          }
+        )
         p()
         out
       }, future.seed = TRUE)
