@@ -450,7 +450,8 @@ test_that("a JSON-text corpus loads json before using json_extract_string", {
 # many rows into both partitions, with the newer one marked by title.
 split_tiny_corpus <- function(corpus, dup = 0L) {
   old <- file.path(corpus, "updated_date=2020-01-01", "part_0000.parquet")
-  df <- arrow::read_parquet(old)
+  # mmap = FALSE: a mapped file cannot be overwritten on Windows (error 1224)
+  df <- arrow::read_parquet(old, mmap = FALSE)
   half <- seq_len(nrow(df) / 2)
   newer <- df[c(setdiff(seq_len(nrow(df)), half), seq_len(dup)), ]
   newer$title[seq_len(dup) + nrow(df) - length(half)] <- "newer"
