@@ -72,7 +72,7 @@ implementation otherwise. \code{"r"} forces pure R and is always available.
 \item{columns}{Character vector of columns to return. \code{NULL} (default)
 returns all. Projection matters: reading 2 of 51 columns from a corpus of
 nested structs is far cheaper than \verb{SELECT *}. Requires
-\code{backend = "r"} — the compiled path always reads every column.}
+\code{backend = "r"} - the compiled path always reads every column.}
 
 \item{add_columns}{Named list of constant columns to add to every returned
 row, e.g. \code{list(relation = "citing")}. Values are embedded as \strong{SQL string

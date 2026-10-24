@@ -47,7 +47,7 @@
 #' @param columns Character vector of columns to return. `NULL` (default)
 #'   returns all. Projection matters: reading 2 of 51 columns from a corpus of
 #'   nested structs is far cheaper than `SELECT *`. Requires
-#'   `backend = "r"` — the compiled path always reads every column.
+#'   `backend = "r"` - the compiled path always reads every column.
 #' @param add_columns Named list of constant columns to add to every returned
 #'   row, e.g. `list(relation = "citing")`. Values are embedded as **SQL string
 #'   literals**, matching `openalexPro::pro_request_parquet()`, so a logical
