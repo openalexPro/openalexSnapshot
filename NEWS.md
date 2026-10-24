@@ -1,4 +1,4 @@
-# openalexSnapshot 0.3.2
+# openalexSnapshot 0.3.3
 
 ## Bug fix: `lookup_by_id(output = )` lost most records
 
@@ -21,6 +21,13 @@ files, only the record from the latest `updated_date=` partition is kept.
 
 The worker closure carried the full set of index matches with it (about
 1 GiB for 7.4 million ids). It now carries only what the workers need.
+
+## Source comments are ASCII-only
+
+Three em dashes in `R/` comments caused `getSrcLines()` translation warnings
+in a US-ASCII locale.
+
+# openalexSnapshot 0.3.2
 
 ## Bug fix: rewriting an index sidecar no longer fails on Windows
 
