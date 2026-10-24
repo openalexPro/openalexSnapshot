@@ -104,6 +104,12 @@
     message("Reading from ", length(file_chunks), " parquet file(s) ...")
   }
 
+  # The worker closure below is serialised together with this function's
+  # environment, so anything large left in it ships to every worker even though
+  # the closure never names it. `matches` (one row per hit) and `ids` made the
+  # closure ~1 GiB for a big id set and tripped future.globals.maxSize.
+  rm(matches, ids, parts)
+
   oopts <- options(future.globals.maxSize = 1e9)
   on.exit(options(oopts), add = TRUE)
   if (!is.null(output)) dir.create(output, recursive = TRUE, showWarnings = FALSE)
