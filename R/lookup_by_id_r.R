@@ -3,10 +3,10 @@
 #
 # Recovered from openalexPro 70539a0:R/lookup_by_id.R (.lookup_one_index).
 # Changes from that version:
-#   * `columns` — project a subset of columns instead of always SELECT *.
+#   * `columns` - project a subset of columns instead of always SELECT *.
 #     Reading 2 of 51 columns from a corpus of deeply nested structs is the
 #     difference between seconds and minutes; the Rust path cannot do this.
-#   * `add_columns` — inject constant columns, emitted as single-quoted SQL
+#   * `add_columns` - inject constant columns, emitted as single-quoted SQL
 #     string literals to match openalexPro::pro_request_parquet(). That is what
 #     lets openalexSnowball run one shared node-assembly step across the API
 #     and snapshot paths.
