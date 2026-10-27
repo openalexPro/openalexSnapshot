@@ -1,3 +1,5 @@
+# openalexSnapshot (development version)
+
 # openalexSnapshot 0.3.4
 
 - License changed from GPL (>= 2) to MIT.
