@@ -18,7 +18,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 [![r-universe](https://openalexpro.r-universe.dev/badges/openalexSnapshot)](https://openalexpro.r-universe.dev/openalexSnapshot)
-[![Codecov test coverage](https://codecov.io/gh/rkrug/openalexSnapshot/graph/badge.svg)](https://app.codecov.io/gh/rkrug/openalexSnapshot)
+[![Codecov test coverage](https://codecov.io/gh/openalexPro/openalexSnapshot/graph/badge.svg)](https://app.codecov.io/gh/openalexPro/openalexSnapshot)
 <!-- badges: end -->
 
 
