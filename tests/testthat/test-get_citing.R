@@ -175,3 +175,104 @@ test_that("a stale index warns but still answers", {
   withr::local_options(openalexSnapshot.check_index_staleness = FALSE)
   expect_no_warning(get_citing("W1000000", root_dir = s$root, verbose = FALSE))
 })
+
+test_that("keypapers that are all unresolvable DOIs give an empty result", {
+  s <- setup_indexed()
+  expect_warning(
+    e <- get_citing("10.9999/nope", root_dir = s$root, verbose = FALSE),
+    "could not be resolved"
+  )
+  expect_equal(e, data.frame(from = character(0), to = character(0)))
+
+  expect_warning(
+    ids <- get_cited("10.9999/nope", root_dir = s$root, return = "ids",
+                     verbose = FALSE),
+    "could not be resolved"
+  )
+  expect_identical(ids, character(0))
+
+  expect_warning(
+    rec <- get_citing("10.9999/nope", root_dir = s$root, return = "records",
+                      verbose = FALSE),
+    "could not be resolved"
+  )
+  expect_equal(rec, data.frame())
+})
+
+test_that("a keypaper of only blanks and NAs is rejected", {
+  expect_error(get_citing(c(NA, "", "  "), root_dir = "x", verbose = FALSE),
+               "contains no usable values")
+})
+
+test_that("a keypaper whose cited_block has no partition yields no edges", {
+  # W888888888 falls in cited_block=88; nothing in the fixture is cited there.
+  s <- setup_indexed()
+  expect_false(dir.exists(file.path(s$root, "works_cite_idx", "cited_block=88")))
+  expect_equal(nrow(get_citing("W888888888", root_dir = s$root,
+                               verbose = FALSE)), 0L)
+  expect_identical(get_citing("W888888888", root_dir = s$root, return = "ids",
+                              verbose = FALSE), character(0))
+})
+
+test_that("an uncited keypaper in an existing partition gives empty records", {
+  # W5000000 sits in cited_block=0, which exists, but no work cites it.
+  s <- setup_indexed()
+  expect_true(dir.exists(file.path(s$root, "works_cite_idx", "cited_block=0")))
+  rec <- get_citing("W5000000", root_dir = s$root, return = "records",
+                    verbose = FALSE)
+  expect_equal(rec, data.frame())
+})
+
+test_that("verbose = TRUE reports partitions read and records extracted", {
+  s <- setup_indexed()
+  msgs <- capture_messages(
+    rec <- get_citing("W1000000", root_dir = s$root, return = "records",
+                      columns = "id", verbose = TRUE)
+  )
+  expect_match(msgs, "^Reading 1 index partition\\(s\\) for 1 keypaper\\(s\\)",
+               all = FALSE)
+  expect_match(msgs, paste0("^Extracting ", nrow(rec), " record\\(s\\)"),
+               all = FALSE)
+})
+
+test_that("get_cited() of a keypaper absent from the id index is empty", {
+  s <- setup_indexed()
+  expect_equal(nrow(get_cited("W2000000", root_dir = s$root, verbose = FALSE)),
+               0L)
+})
+
+test_that("get_cited() reads a native VARCHAR[] referenced_works", {
+  # The official parquet stores a list column, which needs no json extension.
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  f <- file.path(corpus, "updated_date=2020-01-01", "part_0000.parquet")
+  src <- as.data.frame(arrow::read_parquet(f, mmap = FALSE))
+  json_refs <- src$referenced_works
+  src$referenced_works <- lapply(json_refs, function(x) {
+    if (is.na(x) || x == "[]") character(0) else unlist(regmatches(
+      x, gregexpr("https://openalex\\.org/W[0-9]+", x)))
+  })
+  arrow::write_parquet(src, f)
+  build_corpus_index(corpus_dir = corpus, verbose = FALSE)
+
+  kp <- src$id[5]
+  e <- get_cited(kp, root_dir = file.path(tmp, "parquet"), verbose = FALSE)
+  expect_true(all(e$from == kp))
+  expect_setequal(e$to, src$referenced_works[[5]])
+})
+
+test_that("staleness is not checked when the recorded corpus has moved", {
+  # The corpus path in the metadata no longer exists (e.g. the volume was
+  # remounted elsewhere); with nothing to compare against, stay quiet.
+  s <- setup_indexed()
+  idx <- file.path(s$root, "works_cite_idx")
+  meta <- .oas_read_index_meta(idx)
+  meta$n_source_files <- 999L
+  meta$corpus_dir <- file.path(tempdir(), "no_such_corpus")
+  arrow::write_parquet(meta, file.path(idx, "_index_meta.parquet"))
+
+  expect_no_warning(
+    e <- get_citing("W1000000", root_dir = s$root, verbose = FALSE)
+  )
+  expect_gt(nrow(e), 0L)
+})
