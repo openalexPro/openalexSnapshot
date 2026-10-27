@@ -134,7 +134,6 @@ test_that("a corpus with no rows fails clearly", {
 })
 
 test_that("a failed build does not poison a later build of another corpus", {
-  skip("Known bug: the default temp_dir is keyed by dataset name only, so resume markers left by a failed build are reused by a later build of a different corpus with the same name")
   # The empty corpus fails after Stage 1 has marked its batch done.
   tmp1 <- withr::local_tempdir()
   d <- file.path(tmp1, "parquet", "works", "updated_date=2020-01-01")
@@ -146,7 +145,10 @@ test_that("a failed build does not poison a later build of another corpus", {
                        block_size = 1e7, verbose = FALSE),
     "No index rows were produced"
   )
-  withr::defer(unlink(file.path(tempdir(), "works_id_idx_tmp"), recursive = TRUE))
+  stale <- .oas_default_temp_dir(normalizePath(file.path(tmp1, "parquet", "works")),
+                                 "_id_idx")
+  expect_true(file.exists(file.path(stale, ".done", "b00001")))
+  withr::defer(unlink(stale, recursive = TRUE))
 
   # A different, valid corpus also named "works" must build from scratch.
   tmp2 <- withr::local_tempdir()

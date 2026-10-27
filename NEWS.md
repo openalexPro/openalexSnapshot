@@ -3,6 +3,16 @@
 - License changed from GPL (>= 2) to MIT.
 - Lifecycle: maturing (was experimental).
 
+## Bug fix: a failed index build no longer poisons a later build of another corpus
+
+The default `temp_dir` of `build_corpus_index()`, `build_citation_index()` and
+`build_doi_index()` was named after the dataset only (e.g.
+`tempdir()/works_id_idx_tmp`). The "batch done" markers left there by a failed
+build were picked up by a later build, in the same R session, of a different
+corpus with the same dataset name, which then skipped those batches and built
+an incomplete index or failed. The default now also carries a hash of the
+corpus path, so only a re-run of the same build resumes from it.
+
 ## Bug fix: re-running `build_corpus_index(root_dir = , data_sets = NULL)` failed
 
 Every folder under `parquet/` was treated as a dataset, including the

@@ -29,7 +29,9 @@ the default is \code{"works"}.}
 \item{memory_limit}{DuckDB memory limit, e.g. \code{"20GB"}.}
 
 \item{temp_dir}{Directory for Stage-1 shards and DuckDB spill. Defaults to a
-subdirectory of \code{\link[=tempdir]{tempdir()}}, which is on local disk.
+subdirectory of \code{\link[=tempdir]{tempdir()}}, which is on local disk, named after the
+index and a hash of the corpus path, so that only a re-run of the same
+build resumes from it.
 
 The default matters. Spilling beside the index puts those writes on the
 same device the corpus is being read from, and on an external USB SSD that
