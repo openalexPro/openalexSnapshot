@@ -28,8 +28,6 @@
 #' @param index_file Explicit path to an index Parquet file created by
 #'   [build_corpus_index()]. When provided, `root_dir`, `data_sets`, and
 #'   `project_dir` are ignored.
-#' @param selected Column selection passed to `arrow::open_dataset()`. Default
-#'   is `NULL` (all columns).
 #' @param backend Retained only so that existing calls passing
 #'   `backend = "rust"` get an explanatory error. The compiled backend was
 #'   removed in 0.1.0; the package is pure R. `"auto"` (the default) and
@@ -107,7 +105,6 @@ lookup_by_id <- function(
   progress    = TRUE,
   verbose     = TRUE,
   index_file  = NULL,
-  selected    = NULL,
   output      = NULL,
   backend     = c("auto", "r", "rust"),
   columns     = NULL,
@@ -125,7 +122,7 @@ lookup_by_id <- function(
     .oas_lookup_one_index(
       index_file = idx, ids = as.character(ids),
       columns = columns, add_columns = add_columns,
-      selected = selected, workers = workers, output = out,
+      workers = workers, output = out,
       memory_limit = memory_limit, temp_dir = temp_dir,
       verbose = isTRUE(verbose)
     )

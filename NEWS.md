@@ -2,6 +2,9 @@
 
 - License changed from GPL (>= 2) to MIT.
 - Lifecycle: maturing (was experimental).
+- `lookup_by_id()` loses its `selected` argument. It was documented as a column
+  selection but wrote the matching index entries to the given path, and nothing
+  used it. Use `columns` to choose the returned columns.
 
 ## Bug fix: a failed index build no longer poisons a later build of another corpus
 

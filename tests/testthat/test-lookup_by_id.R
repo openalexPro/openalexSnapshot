@@ -197,10 +197,3 @@ test_that("file_row_number never leaks, even when requested as a column", {
   expect_equal(nrow(got), 2L)
 })
 
-test_that("selected is a column selection, as documented", {
-  skip("Known bug: `selected` is documented as a column selection but is used as an output path for the index matches")
-  s <- setup_id_index()
-  got <- lookup_by_id(ids = tiny_ids()[1:2], index_file = s$idx,
-                      selected = c("id", "title"), verbose = FALSE)
-  expect_equal(names(got), c("id", "title"))
-})

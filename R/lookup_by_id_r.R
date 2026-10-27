@@ -20,7 +20,6 @@
                                   ids,
                                   columns = NULL,
                                   add_columns = NULL,
-                                  selected = NULL,
                                   workers = NULL,
                                   memory_limit = NULL,
                                   temp_dir = NULL,
@@ -74,11 +73,6 @@
   }
   if (isTRUE(verbose)) {
     message("Found ", nrow(matches), " matching records in index")
-  }
-
-  if (!is.null(selected)) {
-    arrow::write_dataset(matches, path = selected, format = "parquet",
-                         partitioning = "parquet_file")
   }
 
   # SELECT list: projection + constant columns --------------------------------
