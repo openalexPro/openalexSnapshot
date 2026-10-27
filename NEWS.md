@@ -3,6 +3,13 @@
 - License changed from GPL (>= 2) to MIT.
 - Lifecycle: maturing (was experimental).
 
+## Bug fix: re-running `build_corpus_index(root_dir = , data_sets = NULL)` failed
+
+Every folder under `parquet/` was treated as a dataset, including the
+`<dataset>_id_idx/` and `<dataset>_cite_idx/` index folders, so a second run
+tried to index the index and failed. Folders whose name ends in `_idx` are now
+skipped.
+
 ## Bug fix: `lookup_by_id(root_dir = , data_sets = NULL)` found no index
 
 Dataset discovery looked for `<dataset>_id_idx.parquet` files, but the ID index

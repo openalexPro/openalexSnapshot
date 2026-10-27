@@ -39,7 +39,6 @@ test_that("root_dir mode with explicit data_sets indexes only those", {
 })
 
 test_that("re-running root_dir mode does not treat index directories as datasets", {
-  skip("Known bug: data_sets = NULL lists every directory under parquet/, including <dataset>_id_idx/, so a re-run tries to index the index")
   tmp <- withr::local_tempdir()
   make_tiny_corpus(tmp)
   build_corpus_index(root_dir = tmp, verbose = FALSE)

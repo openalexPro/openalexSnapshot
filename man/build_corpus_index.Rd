@@ -25,7 +25,8 @@ by the snapshot conversion pipeline. If provided, the index for each dataset in
 
 \item{data_sets}{Character vector of dataset names to index (e.g.
 \code{c("works", "authors")}). \code{NULL} indexes all datasets found under
-\verb{<root_dir>/parquet/}. Ignored when \code{corpus_dir} is provided.}
+\verb{<root_dir>/parquet/}, skipping hidden folders and index folders
+(names ending in \verb{_idx}). Ignored when \code{corpus_dir} is provided.}
 
 \item{workers}{Number of parallel workers for Stage 1 indexing. Default is
 \code{NULL} (sequential).}
