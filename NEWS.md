@@ -1,5 +1,8 @@
 # openalexSnapshot (development version)
 
+- License changed from GPL (>= 2) to MIT.
+- Lifecycle: maturing (was experimental).
+
 # openalexSnapshot 0.3.3
 
 ## Bug fix: `lookup_by_id(output = )` lost most records
