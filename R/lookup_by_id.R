@@ -152,13 +152,8 @@ lookup_by_id <- function(
   parquet_root <- .oas_parquet_root(root_dir)
 
   if (is.null(data_sets)) {
-    idx_files <- list.files(
-      parquet_root,
-      pattern   = "_id_idx\\.parquet$",
-      full.names = FALSE,
-      recursive  = FALSE
-    )
-    data_sets <- sub("_id_idx\\.parquet$", "", idx_files)
+    idx_dirs  <- list.dirs(parquet_root, full.names = FALSE, recursive = FALSE)
+    data_sets <- sub("_id_idx$", "", grep("_id_idx$", idx_dirs, value = TRUE))
   }
 
   if (length(data_sets) == 0L) {

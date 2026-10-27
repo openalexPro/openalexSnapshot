@@ -71,7 +71,6 @@ test_that("root_dir mode errors when no index has been built", {
 })
 
 test_that("root_dir mode with data_sets = NULL discovers built indexes", {
-  skip("Known bug: data_sets = NULL globs for '_id_idx.parquet' files, but the id index is a '_id_idx/' directory")
   s <- setup_id_index()
   proj <- file.path(s$tmp, "project")
 

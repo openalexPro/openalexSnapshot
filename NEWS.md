@@ -3,6 +3,12 @@
 - License changed from GPL (>= 2) to MIT.
 - Lifecycle: maturing (was experimental).
 
+## Bug fix: `lookup_by_id(root_dir = , data_sets = NULL)` found no index
+
+Dataset discovery looked for `<dataset>_id_idx.parquet` files, but the ID index
+is a `<dataset>_id_idx/` directory, so every call failed with "No index files
+found". It now discovers the index directories.
+
 # openalexSnapshot 0.3.3
 
 ## Bug fix: `lookup_by_id(output = )` lost most records
