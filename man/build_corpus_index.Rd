@@ -25,7 +25,8 @@ by the snapshot conversion pipeline. If provided, the index for each dataset in
 
 \item{data_sets}{Character vector of dataset names to index (e.g.
 \code{c("works", "authors")}). \code{NULL} indexes all datasets found under
-\verb{<root_dir>/parquet/}. Ignored when \code{corpus_dir} is provided.}
+\verb{<root_dir>/parquet/}, skipping hidden folders and index folders
+(names ending in \verb{_idx}). Ignored when \code{corpus_dir} is provided.}
 
 \item{workers}{Number of parallel workers for Stage 1 indexing. Default is
 \code{NULL} (sequential).}
@@ -33,7 +34,9 @@ by the snapshot conversion pipeline. If provided, the index for each dataset in
 \item{memory_limit}{DuckDB memory limit (e.g., \code{"20GB"}). Default is \code{NULL}.}
 
 \item{temp_dir}{Directory for Stage-1 shards and DuckDB spill. Defaults to a
-subdirectory of \code{\link[=tempdir]{tempdir()}}, which is on local disk.
+subdirectory of \code{\link[=tempdir]{tempdir()}}, which is on local disk, named after the
+index and a hash of the corpus path, so that only a re-run of the same
+build resumes from it.
 
 The default matters. Spilling beside the index puts those writes on the
 same device the corpus is being read from, and on an external USB SSD that

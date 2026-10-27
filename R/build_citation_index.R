@@ -46,7 +46,9 @@
 #'   rather than sizing `memory_limit` for the worst batch and throttling all
 #'   of them, dense batches are re-run alone with the whole machine.
 #' @param temp_dir Directory for Stage-1 shards and DuckDB spill. Defaults to a
-#'   subdirectory of [tempdir()], which is on local disk.
+#'   subdirectory of [tempdir()], which is on local disk, named after the
+#'   index and a hash of the corpus path, so that only a re-run of the same
+#'   build resumes from it.
 #'
 #'   The default matters. Spilling beside the index puts those writes on the
 #'   same device the corpus is being read from, and on an external USB SSD that
@@ -154,7 +156,7 @@ build_citation_index <- function(root_dir = NULL,
 
   files <- .oas_corpus_files(corpus_dir)
   if (is.null(temp_dir)) {
-    temp_dir <- file.path(tempdir(), paste0(corpus_name, "_cite_idx_tmp"))
+    temp_dir <- .oas_default_temp_dir(corpus_dir, "_cite_idx")
   }
   shards_dir <- file.path(temp_dir, "shards")
   done_dir   <- file.path(temp_dir, ".done")

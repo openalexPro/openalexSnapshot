@@ -270,6 +270,22 @@
   if (is.na(f)) NA_real_ else f * 1024
 }
 
+#' Default Stage-1 work directory for an index build
+#'
+#' Under [tempdir()], named after the index *and* a hash of the normalised
+#' corpus path. Named after the index alone, the "batch done" markers left by a
+#' failed build were reused by a later build of a different corpus with the
+#' same dataset name, which then skipped those batches. The same corpus still
+#' maps to the same directory, so re-running a build resumes it.
+#'
+#' @param corpus_dir Normalised corpus directory.
+#' @param suffix Index suffix, e.g. `"_id_idx"`.
+#' @noRd
+.oas_default_temp_dir <- function(corpus_dir, suffix) {
+  file.path(tempdir(), paste0(basename(corpus_dir), suffix, "_tmp_",
+                              substr(rlang::hash(corpus_dir), 1L, 12L)))
+}
+
 #' Refuse to start a build that cannot fit
 #'
 #' The default `temp_dir` is on local disk, which is typically far smaller than

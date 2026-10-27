@@ -13,7 +13,6 @@ lookup_by_id(
   progress = TRUE,
   verbose = TRUE,
   index_file = NULL,
-  selected = NULL,
   output = NULL,
   backend = c("auto", "r", "rust"),
   columns = NULL,
@@ -51,9 +50,6 @@ is \code{NULL} (sequential).}
 \item{index_file}{Explicit path to an index Parquet file created by
 \code{\link[=build_corpus_index]{build_corpus_index()}}. When provided, \code{root_dir}, \code{data_sets}, and
 \code{project_dir} are ignored.}
-
-\item{selected}{Column selection passed to \code{arrow::open_dataset()}. Default
-is \code{NULL} (all columns).}
 
 \item{output}{Path to an output directory for writing results as Parquet
 files when using \code{index_file} mode. If \code{NULL} (default), results are

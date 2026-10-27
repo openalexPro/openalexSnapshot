@@ -1,6 +1,6 @@
 Package: openalexSnapshot
 Title: OpenAlex Bulk Snapshot Conversion, Indexing, and Record Extraction
-Version: 0.3.3
+Version: 0.3.4
 Author: Rainer M Krug
 Maintainer: Rainer M Krug <Rainer@krugs.de>
 Description: Provides tools for working with the OpenAlex bulk snapshot:
@@ -11,7 +11,7 @@ Description: Provides tools for working with the OpenAlex bulk snapshot:
     retrieved without network access. Indexing and extraction are implemented
     in R over DuckDB. The package is pure R: no compiled code, and no Rust
     toolchain is needed to install it.
-License: GPL (>= 2)
+License: MIT + file LICENSE
 URL: https://github.com/openalexPro/openalexSnapshot, https://openalexpro.github.io/openalexSnapshot/, https://doi.org/10.5281/zenodo.20448992
 BugReports: https://github.com/openalexPro/openalexSnapshot/issues
 Additional_repositories: https://openalexpro.r-universe.dev

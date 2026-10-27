@@ -62,7 +62,7 @@
   }
   block_size <- as.numeric(block_size)
   if (is.null(temp_dir)) {
-    temp_dir <- file.path(tempdir(), paste0(corpus_name, "_id_idx_tmp"))
+    temp_dir <- .oas_default_temp_dir(corpus_dir, "_id_idx")
   }
   shards_dir <- file.path(temp_dir, "shards")
   done_dir   <- file.path(temp_dir, ".done")

@@ -135,3 +135,114 @@ test_that("lookup_by_doi() returns records and warns on unresolved input", {
     "could not be resolved"
   )
 })
+
+test_that("build_doi_index() needs root_dir or an existing corpus_dir", {
+  expect_error(build_doi_index(verbose = FALSE),
+               "Provide either `root_dir` or `corpus_dir`")
+  expect_error(
+    build_doi_index(corpus_dir = file.path(withr::local_tempdir(), "nope"),
+                    verbose = FALSE),
+    "corpus_dir does not exist"
+  )
+})
+
+test_that("root_dir mode builds the DOI index and returns root_dir", {
+  tmp <- withr::local_tempdir()
+  make_tiny_corpus(tmp)
+
+  res <- build_doi_index(root_dir = tmp, verbose = FALSE)
+  expect_equal(res, tmp)
+  expect_true(file.exists(file.path(tmp, "parquet", "works_doi_idx.parquet")))
+})
+
+test_that("build_doi_index() skips an existing index unless overwritten", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  idx <- build_doi_index(corpus_dir = corpus, verbose = FALSE)
+  # mark the file so a rebuild is detectable
+  arrow::write_parquet(data.frame(doi = "sentinel"), idx)
+
+  expect_message(build_doi_index(corpus_dir = corpus, verbose = FALSE),
+                 "index_file exists - creation skipped")
+  expect_equal(as.data.frame(arrow::read_parquet(idx))$doi, "sentinel")
+
+  build_doi_index(corpus_dir = corpus, overwrite = TRUE, verbose = FALSE)
+  d <- as.data.frame(arrow::read_parquet(idx))
+  expect_false("sentinel" %in% d$doi)
+  expect_equal(nrow(d), 11L)            # every fixture work but the DOI-less one
+})
+
+test_that("a dataset without a doi column is refused", {
+  tmp <- withr::local_tempdir()
+  d <- file.path(tmp, "parquet", "authors", "updated_date=2020-01-01")
+  dir.create(d, recursive = TRUE)
+  arrow::write_parquet(data.frame(id = "https://openalex.org/A1"),
+                       file.path(d, "part_0000.parquet"))
+  expect_error(
+    build_doi_index(corpus_dir = file.path(tmp, "parquet", "authors"),
+                    verbose = FALSE),
+    "Dataset 'authors' has no `doi` column"
+  )
+})
+
+test_that("verbose = TRUE reports both stages", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  msgs <- capture_messages(build_doi_index(corpus_dir = corpus, verbose = TRUE))
+  expect_match(msgs, "^Building DOI index from: ", all = FALSE)
+  expect_match(msgs, "^Stage 1: 1 files in 1 batches", all = FALSE)
+  expect_match(msgs, "^Stage 2: sorting by doi into ", all = FALSE)
+  expect_match(msgs, "^Done! Index size: ", all = FALSE)
+  expect_match(msgs, "^Total time: ", all = FALSE)
+})
+
+test_that("an existing Stage-1 shard is resumed rather than rebuilt", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  work <- file.path(tmp, "work")
+  dir.create(work)
+  # A shard left by an interrupted run. Resume trusts it, so the index must
+  # consist of exactly its rows.
+  arrow::write_parquet(
+    data.frame(doi = "10.9999/planted", id = "https://openalex.org/W7",
+               id_block = 0L, parquet_file = "works/x.parquet",
+               file_row_number = 0),
+    file.path(work, "doi_00001.parquet")
+  )
+
+  idx <- build_doi_index(corpus_dir = corpus, temp_dir = work, verbose = FALSE)
+  d <- as.data.frame(arrow::read_parquet(idx))
+  expect_equal(d$doi, "10.9999/planted")
+  expect_false(dir.exists(work))       # temp_dir is cleaned up on success
+})
+
+test_that("doi_to_id() validates its arguments", {
+  expect_error(doi_to_id(index_file = "x"), "`doi` must be provided")
+  expect_error(doi_to_id(character(0), index_file = "x"),
+               "`doi` must be provided")
+  expect_error(doi_to_id("10.1/x"), "Provide either `root_dir` or `index_file`")
+})
+
+test_that("doi_to_id() reports the number of distinct DOIs it resolves", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  idx <- build_doi_index(corpus_dir = corpus, verbose = FALSE)
+  expect_message(
+    doi_to_id(c("10.1234/test.1", "https://doi.org/10.1234/test.1",
+                "10.1234/test.2"), index_file = idx, verbose = TRUE),
+    "Resolving 2 DOI\\(s\\)"
+  )
+})
+
+test_that("lookup_by_doi() returns an empty frame when nothing resolves", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  build_doi_index(corpus_dir = corpus, verbose = FALSE)
+
+  expect_warning(
+    got <- lookup_by_doi("10.9999/nope", root_dir = tmp, verbose = FALSE),
+    "1 DOI\\(s\\) could not be resolved.*10.9999/nope"
+  )
+  expect_s3_class(got, "data.frame")
+  expect_equal(nrow(got), 0L)
+})

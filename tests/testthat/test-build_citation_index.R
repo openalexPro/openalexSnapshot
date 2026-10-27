@@ -224,3 +224,146 @@ test_that("a build that cannot fit is refused before it starts", {
   # unknown free space must not block
   expect_silent(.oas_check_space(tmp, need_bytes = 1))
 })
+
+# Number of reference edges in a corpus, counted independently of DuckDB.
+n_ref_edges <- function(corpus) {
+  src <- dplyr::collect(arrow::open_dataset(corpus))
+  sum(vapply(src$referenced_works, function(x) {
+    if (is.na(x) || x == "[]") 0L else lengths(regmatches(x, gregexpr("W[0-9]+", x)))
+  }, integer(1)))
+}
+
+test_that("build_citation_index() needs root_dir or corpus_dir", {
+  expect_error(build_citation_index(verbose = FALSE),
+               "Provide either `root_dir` or `corpus_dir`")
+  expect_error(
+    build_citation_index(corpus_dir = file.path(withr::local_tempdir(), "nope"),
+                         verbose = FALSE),
+    "corpus_dir does not exist"
+  )
+})
+
+test_that("root_dir mode builds an index per data set and returns root_dir", {
+  tmp <- withr::local_tempdir()
+  make_tiny_corpus(tmp)
+
+  res <- build_citation_index(root_dir = tmp, verbose = FALSE)
+  expect_equal(res, tmp)
+  expect_true(file.exists(
+    file.path(tmp, "parquet", "works_cite_idx", "_index_meta.parquet")
+  ))
+})
+
+test_that("verbose = TRUE reports both stages and a matching edge count", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+
+  msgs <- capture_messages(
+    idx <- build_citation_index(corpus_dir = corpus, verbose = TRUE)
+  )
+  n_edges <- as.numeric(.oas_read_index_meta(idx)$n_edges)
+  expect_match(msgs, "^Building citation index from: ", all = FALSE)
+  expect_match(msgs, "referenced_works encoding: json_varchar", all = FALSE)
+  expect_match(msgs, "^Stage 1: 1 files in 1 batches, block_size = 10000000",
+               all = FALSE)
+  expect_match(msgs, "^Stage 2: sorting [0-9]+ blocks", all = FALSE)
+  expect_match(msgs, paste0("^Done! ", n_edges, " edges in "), all = FALSE)
+  expect_match(msgs, "^Total time: ", all = FALSE)
+})
+
+test_that("an interrupted build resumes its completed Stage-1 batches", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  work <- file.path(tmp, "work")
+
+  # Interrupt after Stage 2 but before the completion marker is written.
+  local({
+    local_mocked_bindings(.oas_write_index_meta = function(...) {
+      stop("simulated interruption")
+    })
+    expect_error(
+      build_citation_index(corpus_dir = corpus, temp_dir = work,
+                           verbose = FALSE),
+      "simulated interruption"
+    )
+  })
+  expect_true(file.exists(file.path(work, ".done", "b00001")))
+
+  # On resume, a batch already marked done must not be re-extracted.
+  local_mocked_bindings(.oas_stage1_sql = function(...) {
+    stop("a completed batch was re-extracted")
+  })
+  idx <- build_citation_index(corpus_dir = corpus, temp_dir = work,
+                              verbose = FALSE)
+  expect_true(file.exists(file.path(idx, "_index_meta.parquet")))
+  expect_equal(as.numeric(.oas_read_index_meta(idx)$n_edges), n_ref_edges(corpus))
+  expect_false(dir.exists(work))       # temp_dir is cleaned up on success
+})
+
+test_that("partial shards of an unfinished batch are cleared before re-running", {
+  # An interrupted partitioned COPY leaves files but no marker. If they were
+  # kept, Stage 2 would read them (here: a corrupt file, which would error).
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  work <- file.path(tmp, "work")
+  stale <- file.path(work, "shards", "cited_block=0", "b00001_99.parquet")
+  dir.create(dirname(stale), recursive = TRUE)
+  writeLines("not a parquet file", stale)
+
+  idx <- build_citation_index(corpus_dir = corpus, temp_dir = work,
+                              block_size = 1e7, verbose = FALSE)
+  expect_equal(as.numeric(.oas_read_index_meta(idx)$n_edges), n_ref_edges(corpus))
+})
+
+test_that("batches that fail in the parallel pass are retried sequentially", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  real_sql <- .oas_stage1_sql
+  calls <- new.env()
+  calls$n <- 0L
+  # The first attempt fails (as an out-of-memory batch would); the retry gets
+  # the real statement.
+  local_mocked_bindings(.oas_stage1_sql = function(...) {
+    calls$n <- calls$n + 1L
+    if (calls$n == 1L) "SELECT * FROM no_such_table" else real_sql(...)
+  })
+
+  msgs <- capture_messages(
+    idx <- build_citation_index(corpus_dir = corpus, retry_memory_limit = "1GB",
+                                verbose = TRUE)
+  )
+  expect_match(msgs, "1 batch\\(es\\) exceeded the per-worker memory limit",
+               all = FALSE)
+  expect_equal(calls$n, 2L)
+  expect_equal(as.numeric(.oas_read_index_meta(idx)$n_edges), n_ref_edges(corpus))
+})
+
+test_that("a batch that also fails its sequential retry is a clear error", {
+  tmp <- withr::local_tempdir()
+  corpus <- make_tiny_corpus(tmp)
+  local_mocked_bindings(.oas_stage1_sql = function(...) {
+    "SELECT * FROM no_such_table"
+  })
+  expect_error(
+    build_citation_index(corpus_dir = corpus, retry_memory_limit = "1GB",
+                         temp_dir = file.path(tmp, "work"), verbose = FALSE),
+    "Batch 1 failed even on a sequential retry with 1GB.*Lower `batch_bytes`"
+  )
+  expect_false(dir.exists(file.path(dirname(corpus), "works_cite_idx")))
+})
+
+test_that("a corpus with no references at all fails clearly", {
+  tmp <- withr::local_tempdir()
+  d <- file.path(tmp, "parquet", "works", "updated_date=2020-01-01")
+  dir.create(d, recursive = TRUE)
+  arrow::write_parquet(
+    data.frame(id = c("https://openalex.org/W1", "https://openalex.org/W2"),
+               referenced_works = c(NA, "[]")),
+    file.path(d, "part_0000.parquet")
+  )
+  expect_error(
+    build_citation_index(corpus_dir = file.path(tmp, "parquet", "works"),
+                         temp_dir = file.path(tmp, "work"), verbose = FALSE),
+    "No edges were extracted"
+  )
+})

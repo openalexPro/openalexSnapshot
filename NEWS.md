@@ -1,3 +1,34 @@
+# openalexSnapshot 0.3.4
+
+- License changed from GPL (>= 2) to MIT.
+- Lifecycle: maturing (was experimental).
+- `lookup_by_id()` loses its `selected` argument. It was documented as a column
+  selection but wrote the matching index entries to the given path, and nothing
+  used it. Use `columns` to choose the returned columns.
+
+## Bug fix: a failed index build no longer poisons a later build of another corpus
+
+The default `temp_dir` of `build_corpus_index()`, `build_citation_index()` and
+`build_doi_index()` was named after the dataset only (e.g.
+`tempdir()/works_id_idx_tmp`). The "batch done" markers left there by a failed
+build were picked up by a later build, in the same R session, of a different
+corpus with the same dataset name, which then skipped those batches and built
+an incomplete index or failed. The default now also carries a hash of the
+corpus path, so only a re-run of the same build resumes from it.
+
+## Bug fix: re-running `build_corpus_index(root_dir = , data_sets = NULL)` failed
+
+Every folder under `parquet/` was treated as a dataset, including the
+`<dataset>_id_idx/` and `<dataset>_cite_idx/` index folders, so a second run
+tried to index the index and failed. Folders whose name ends in `_idx` are now
+skipped.
+
+## Bug fix: `lookup_by_id(root_dir = , data_sets = NULL)` found no index
+
+Dataset discovery looked for `<dataset>_id_idx.parquet` files, but the ID index
+is a `<dataset>_id_idx/` directory, so every call failed with "No index files
+found". It now discovers the index directories.
+
 # openalexSnapshot 0.3.3
 
 ## Bug fix: `lookup_by_id(output = )` lost most records

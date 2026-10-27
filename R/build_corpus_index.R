@@ -18,12 +18,15 @@
 #'   `data_sets` is created at `<root_dir>/parquet/<dataset>_id_idx/`.
 #' @param data_sets Character vector of dataset names to index (e.g.
 #'   `c("works", "authors")`). `NULL` indexes all datasets found under
-#'   `<root_dir>/parquet/`. Ignored when `corpus_dir` is provided.
+#'   `<root_dir>/parquet/`, skipping hidden folders and index folders
+#'   (names ending in `_idx`). Ignored when `corpus_dir` is provided.
 #' @param workers Number of parallel workers for Stage 1 indexing. Default is
 #'   `NULL` (sequential).
 #' @param memory_limit DuckDB memory limit (e.g., `"20GB"`). Default is `NULL`.
 #' @param temp_dir Directory for Stage-1 shards and DuckDB spill. Defaults to a
-#'   subdirectory of [tempdir()], which is on local disk.
+#'   subdirectory of [tempdir()], which is on local disk, named after the
+#'   index and a hash of the corpus path, so that only a re-run of the same
+#'   build resumes from it.
 #'
 #'   The default matters. Spilling beside the index puts those writes on the
 #'   same device the corpus is being read from, and on an external USB SSD that
@@ -132,7 +135,9 @@ build_corpus_index <- function(
 
   if (is.null(data_sets)) {
     data_sets <- list.dirs(parquet_root, recursive = FALSE, full.names = FALSE)
-    data_sets <- data_sets[!grepl("^\\.", data_sets)]
+    # Skip hidden folders and the indexes this package writes beside the
+    # datasets (<ds>_id_idx/, <ds>_cite_idx/), or a re-run indexes an index.
+    data_sets <- data_sets[!grepl("^\\.|_idx$", data_sets)]
   }
 
   for (ds in data_sets) {

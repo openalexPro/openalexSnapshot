@@ -27,7 +27,9 @@
 #' @param workers Number of parallel workers for Stage 1.
 #' @param memory_limit DuckDB memory limit, e.g. `"20GB"`.
 #' @param temp_dir Directory for Stage-1 shards and DuckDB spill. Defaults to a
-#'   subdirectory of [tempdir()], which is on local disk.
+#'   subdirectory of [tempdir()], which is on local disk, named after the
+#'   index and a hash of the corpus path, so that only a re-run of the same
+#'   build resumes from it.
 #'
 #'   The default matters. Spilling beside the index puts those writes on the
 #'   same device the corpus is being read from, and on an external USB SSD that
@@ -130,7 +132,7 @@ build_doi_index <- function(root_dir = NULL,
   }
 
   if (is.null(temp_dir)) {
-    temp_dir <- file.path(tempdir(), paste0(corpus_name, "_doi_idx_tmp"))
+    temp_dir <- .oas_default_temp_dir(corpus_dir, "_doi_idx")
   }
   dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
   batches <- .oas_plan_batches(files, batch_bytes = batch_bytes)
