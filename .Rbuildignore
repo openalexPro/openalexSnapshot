@@ -4,3 +4,5 @@
 ^CLAUDE\.md$
 ^TODO\.md$
 ^vignettes$
+^CITATION\.cff$
+^\.zenodo\.json$
