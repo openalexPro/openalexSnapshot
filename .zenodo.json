@@ -1,0 +1,25 @@
+{
+  "title": "openalexSnapshot: OpenAlex Bulk Snapshot Conversion, Indexing, and Record Extraction",
+  "upload_type": "software",
+  "creators": [
+    {
+      "name": "Krug, Rainer M",
+      "orcid": "0000-0002-7490-0066"
+    }
+  ],
+  "license": "MIT",
+  "keywords": ["OpenAlex", "bibliometrics", "R", "snapshot", "Parquet", "DuckDB", "openalexPro ecosystem"],
+  "related_identifiers": [
+    {
+      "identifier": "https://openalexpro.github.io/",
+      "relation": "isPartOf",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "10.5281/zenodo.20448982",
+      "relation": "isRequiredBy",
+      "scheme": "doi",
+      "resource_type": "software"
+    }
+  ]
+}

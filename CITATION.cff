@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "openalexSnapshot: OpenAlex Bulk Snapshot Conversion, Indexing, and Record Extraction"
+authors:
+  - family-names: Krug
+    given-names: Rainer M
+    orcid: "https://orcid.org/0000-0002-7490-0066"
+doi: 10.5281/zenodo.20448992
+license: MIT
+repository-code: "https://github.com/openalexPro/openalexSnapshot"
+url: "https://openalexpro.github.io/openalexSnapshot/"
+keywords: [OpenAlex, bibliometrics, R, snapshot, Parquet, DuckDB]
+references:
+  - type: software
+    title: "The openalexPro ecosystem: R packages for large-scale work with OpenAlex"
+    authors:
+      - family-names: Krug
+        given-names: Rainer M
+        orcid: "https://orcid.org/0000-0002-7490-0066"
+    url: "https://openalexpro.github.io/"
