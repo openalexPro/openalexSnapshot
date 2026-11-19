@@ -1,0 +1,323 @@
+# Working with the OpenAlex Bulk Snapshot
+
+## Introduction
+
+OpenAlex provides complete data snapshots that can be downloaded and
+processed locally. This approach offers several advantages over API
+queries:
+
+- **No rate limits**: Process millions of records without API
+  restrictions
+- **Reproducibility**: Work with a fixed point-in-time dataset
+- **Speed**: Local queries are significantly faster than API calls (in
+  many cases, especially where large result corpora are concerned)
+- **Offline access**: No internet connection required after download
+
+This vignette guides you through:
+
+1.  Setting up your environment
+2.  Downloading the OpenAlex snapshot
+3.  Converting to Parquet format
+4.  Building indexes for fast lookups
+5.  Querying your local corpus
+6.  Managing updates
+
+## Prerequisites
+
+### Hardware Requirements
+
+Working with the full OpenAlex snapshot requires significant resources:
+
+| Resource   | Minimum | Recommended |
+|------------|---------|-------------|
+| Disk space | 2.5 TB  | 3+ TB       |
+| RAM        | 16 GB   | 32+ GB      |
+| CPU        | 2 cores | 4+ cores    |
+
+The snapshot download is approximately 1.2 TB. The Parquet conversion
+adds another 100–200 GB depending on compression settings.
+
+### Software Requirements
+
+- **R** (\>= 4.1.2)
+- **openalexSnapshot**: This package (see installation below)
+- **AWS CLI**: For downloading the snapshot from S3
+
+#### Installing openalexSnapshot
+
+``` r
+
+install.packages(
+  "openalexSnapshot",
+  repos = c("https://openalexpro.r-universe.dev", "https://cloud.r-project.org")
+)
+```
+
+For the development version:
+
+``` r
+
+# install.packages("pak")
+pak::pak("rkrug/openalexSnapshot")
+```
+
+#### Installing AWS CLI
+
+``` bash
+# macOS (with Homebrew)
+brew install awscli
+
+# Ubuntu/Debian
+sudo apt install awscli
+
+# Windows (with winget)
+winget install Amazon.AWSCLI
+```
+
+Verify installation:
+
+``` bash
+aws --version
+```
+
+No AWS account is required — the OpenAlex bucket allows anonymous
+access.
+
+## Step-by-Step Guide
+
+### 1. Set Up Your Root Directory
+
+Choose a location with sufficient disk space. All paths are derived from
+a single `root_dir`:
+
+    <root_dir>/
+      parquet/                    # the snapshot, plus the indexes built over it
+      openalex-snapshot_metadata/ # reports, logs, schema caches
+
+### 2. Download the Snapshot
+
+OpenAlex publishes the snapshot **natively in Parquet**, so there is no
+conversion step: download it and you are ready to index. (Earlier
+releases of this package shipped a `snapshot_to_parquet()` that
+converted the old `.json.gz` distribution; it has been removed, because
+that path is dead.)
+
+The snapshot is hosted on Amazon S3 and updated regularly. `aws s3 sync`
+resumes interrupted downloads and only fetches new or changed files:
+
+``` bash
+aws s3 sync \
+  s3://openalex \
+  /Volumes/external-drive/openalex/parquet \
+  --no-sign-request
+```
+
+**Expected time**: 2–12 hours depending on your connection.
+
+**Tip**: monitor progress in another terminal:
+
+``` bash
+watch -n 60 'du -sh /Volumes/external-drive/openalex/parquet/*'
+```
+
+#### Snapshot Structure
+
+Each entity is a directory of Parquet files, hive-partitioned by update
+date:
+
+    parquet/
+    ├── works/
+    │   └── updated_date=YYYY-MM-DD/
+    │       ├── part_0000.parquet
+    │       └── ...
+    ├── authors/
+    ├── institutions/
+    ├── sources/
+    ├── publishers/
+    ├── funders/
+    └── topics/
+
+### 3. A note on size
+
+The works corpus is the bulk of it — on the order of 900 GB across
+~2,000 files, roughly 500 million records. Two consequences worth
+knowing before you start:
+
+- **Column projection is the main cost lever.** Works carry ~51 columns,
+  many of them deeply nested; `abstract` alone is over 10 GB.
+  [`lookup_by_id()`](https://openalexpro.github.io/openalexSnapshot/reference/lookup_by_id.md)
+  and
+  [`get_citing()`](https://openalexpro.github.io/openalexSnapshot/reference/get_citing.md)
+  both take `columns`, and naming only what you need changes runtimes by
+  an order of magnitude.
+- **Point the DuckDB spill directory at a fast local disk.** Spilling
+  onto the same external volume as the corpus was measured about 10x
+  slower than onto an internal SSD. The builders default `temp_dir` to
+  [`tempdir()`](https://rdrr.io/r/base/tempfile.html) for this reason;
+  override it only if
+  [`tempdir()`](https://rdrr.io/r/base/tempfile.html) is small or slow.
+
+### 4. Build Search Indexes
+
+For fast ID-based lookups, build an index for each dataset:
+
+``` r
+
+build_corpus_index(
+  root_dir  = "/Volumes/external-drive/openalex",
+  data_sets = NULL,   # NULL = all datasets
+  workers   = 8
+)
+```
+
+This creates `<root_dir>/parquet/<dataset>_id_idx/` for each dataset — a
+**partitioned directory**, not a single file, so a lookup opens only the
+blocks it needs. The index maps each OpenAlex ID to its physical
+location (file and row number) so
+[`lookup_by_id()`](https://openalexpro.github.io/openalexSnapshot/reference/lookup_by_id.md)
+can retrieve records without scanning the corpus.
+
+Two further indexes are optional but needed for the citation graph:
+
+``` r
+
+# Who cites whom. This inverts `referenced_works`, and is what makes the
+# forward direction possible offline at all: `cited_by_api_url` is a URL.
+build_citation_index(
+  root_dir = "/Volumes/external-drive/openalex",
+  workers  = 8
+)
+
+# Only if you want to resolve DOIs without the API.
+build_doi_index(root_dir = "/Volumes/external-drive/openalex")
+```
+
+[`build_citation_index()`](https://openalexpro.github.io/openalexSnapshot/reference/build_citation_index.md)
+is the expensive one — it materialises roughly three billion edges — and
+it is resumable: completed batches are skipped on a re-run, so an
+interrupted build continues rather than restarting.
+
+## Using Your Local Corpus
+
+### Looking Up Records by ID
+
+``` r
+
+library(openalexSnapshot)
+
+# Extract specific works — output written to a temp directory
+out_dir <- tempfile()
+lookup_by_id(
+  index_file = "/Volumes/external-drive/openalex/parquet/works_id_idx.parquet",
+  ids        = c("W2741809807", "W2100837269"),
+  output_dir = out_dir
+)
+
+# Read the results
+library(arrow)
+works <- open_dataset(out_dir) |> collect()
+```
+
+IDs can be supplied in short form (`"W2741809807"`) or long form
+(`"https://openalex.org/W2741809807"`); both are accepted and normalised
+automatically.
+
+### Direct DuckDB Queries
+
+For complex analytical queries, use DuckDB directly:
+
+``` r
+
+library(duckdb)
+library(DBI)
+
+con <- dbConnect(duckdb())
+
+# Register parquet files as a view
+dbExecute(
+  con,
+  "
+  CREATE VIEW works AS
+  SELECT * FROM parquet_scan('/Volumes/external-drive/openalex/parquet/works/*.parquet')
+  "
+)
+
+# Run analytical queries
+result <- dbGetQuery(
+  con,
+  "
+  SELECT publication_year, COUNT(*) AS n_works
+  FROM works
+  WHERE publication_year >= 2020
+  GROUP BY publication_year
+  ORDER BY publication_year
+  "
+)
+
+dbDisconnect(con)
+```
+
+## Managing Updates
+
+OpenAlex releases new snapshots regularly. The recommended update
+workflow:
+
+### Checking for Updates
+
+``` bash
+# Show bucket info (size, file count)
+aws s3 ls s3://openalex/data/ --no-sign-request --recursive --summarize | tail -2
+```
+
+### Update Workflow
+
+``` bash
+# 1. Archive the current snapshot with a datestamp
+mv /Volumes/external-drive/openalex/snapshot \
+   /Volumes/external-drive/openalex/snapshot-$(date +%Y-%m-%d)
+
+# 2. Download the new snapshot
+aws s3 sync \
+  s3://openalex \
+  /Volumes/external-drive/openalex/snapshot \
+  --no-sign-request
+
+# 3. Archive the current parquet directory
+mv /Volumes/external-drive/openalex/parquet \
+   /Volumes/external-drive/openalex/parquet-$(date +%Y-%m-%d)
+```
+
+## Troubleshooting
+
+### Download Issues
+
+**Interrupted download**: Re-run the `aws s3 sync` command. It resumes
+where it left off.
+
+**Slow download**: OpenAlex uses CloudFront CDN. Speed depends on your
+location and internet connection. Consider running overnight.
+
+**Disk space errors**: Ensure you have at least 400 GB free before
+starting.
+
+### Conversion Issues
+
+**Out of memory**: Reduce memory usage:
+
+``` r
+  root_dir     = "/Volumes/external-drive/openalex",
+  workers      = 1,
+  profile      = "safe",
+  memory_limit = 4000
+)
+```
+
+## Additional Resources
+
+- [OpenAlex Documentation](https://docs.openalex.org/)
+- [OpenAlex Snapshot
+  Documentation](https://docs.openalex.org/download-all-data/openalex-snapshot)
+- [DuckDB Documentation](https://duckdb.org/docs/)
+- [Apache Parquet Format](https://parquet.apache.org/)
+- [openalexPro](https://openalexpro.github.io/openalexPro) — API access
+  and advanced workflows
