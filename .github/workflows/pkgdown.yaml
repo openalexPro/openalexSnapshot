@@ -1,9 +1,12 @@
-# Build pkgdown site on push/PR to main (no deploy step).
+# Build pkgdown site on push/PR to main; deploy to gh-pages on push, release and manual runs.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
 
 name: pkgdown
 
@@ -15,6 +18,10 @@ env:
 jobs:
   pkgdown:
     runs-on: ubuntu-latest
+    concurrency:
+      group: pkgdown-${{ github.event_name != 'pull_request' || github.run_id }}
+    permissions:
+      contents: write
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -37,3 +44,11 @@ jobs:
       - name: Build pkgdown site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
+
+      - name: Deploy to GitHub pages
+        if: github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        with:
+          clean: false
+          branch: gh-pages
+          folder: docs
