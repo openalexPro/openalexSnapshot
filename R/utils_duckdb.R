@@ -25,11 +25,34 @@
 #' @noRd
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+#' DuckDB driver without the storage-location message
+#'
+#' duckdb >= 2.0.0 announces where it keeps extensions and secrets every
+#' time `duckdb()` has to pick that location itself (up to 60 times per
+#' non-interactive session, and it may prompt to create `~/.duckdb` in an
+#' interactive one). Making the choice explicit silences it. We pick exactly
+#' what duckdb would have picked -- the shared `~/.duckdb` if it exists, a
+#' per-session temporary directory otherwise -- and leave a user's own
+#' choice (`duckdb.home` option, `DUCKDB_R_HOME`) alone. Same as
+#' openalexPro's `.pro_duckdb()`.
+#'
+#' @return A duckdb driver object.
+#' @keywords internal
+#' @noRd
+.oas_duckdb <- function() {
+  user_chose <- !is.null(getOption("duckdb.home")) ||
+    nzchar(Sys.getenv("DUCKDB_R_HOME"))
+  if (user_chose || !"shared_home" %in% names(formals(duckdb::duckdb))) {
+    return(duckdb::duckdb())
+  }
+  duckdb::duckdb(shared_home = dir.exists("~/.duckdb"))
+}
+
 .oas_con <- function(memory_limit = NULL,
                      temp_dir = NULL,
                      threads = NULL,
                      preserve_order = FALSE) {
-  con <- DBI::dbConnect(duckdb::duckdb(), read_only = FALSE)
+  con <- DBI::dbConnect(.oas_duckdb(), read_only = FALSE)
   DBI::dbExecute(con, paste0(
     "SET preserve_insertion_order = ", if (isTRUE(preserve_order)) "true" else "false"
   ))
