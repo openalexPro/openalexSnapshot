@@ -8,7 +8,7 @@
 ## Citation
 
 Source:
-[`inst/CITATION`](https://github.com/openalexPro/openalexSnapshot/blob/main/inst/CITATION)
+[`inst/CITATION`](https://github.com/openalexPro/openalexSnapshot/blob/v0.3.6/inst/CITATION)
 
 Krug, R. M. (2026). openalexSnapshot: OpenAlex Bulk Snapshot Conversion,
 Indexing, and Record Extraction. R package version 0.3.6.
