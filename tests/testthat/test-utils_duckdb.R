@@ -112,3 +112,12 @@ test_that(".oas_refs_expr() refuses a corpus with mixed encodings", {
 test_that(".oas_read_index_meta() returns NULL when there is no sidecar", {
   expect_null(.oas_read_index_meta(withr::local_tempdir()))
 })
+
+test_that(".oas_duckdb() opens a connection without the storage message", {
+  withr::local_options(duckdb.home = NULL)
+  withr::local_envvar(DUCKDB_R_HOME = "")
+  expect_silent(drv <- .oas_duckdb())
+  con <- DBI::dbConnect(drv)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  expect_equal(DBI::dbGetQuery(con, "SELECT 1 AS x")$x, 1)
+})

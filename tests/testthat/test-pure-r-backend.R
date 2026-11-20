@@ -386,7 +386,7 @@ test_that("lookup_by_id(output=) writes the same schema it returns", {
   expect_setequal(names(written), names(in_mem))
 
   # and the written output must be re-readable with file_row_number = true
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(.oas_duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   expect_no_error(
     DBI::dbGetQuery(con, sprintf(
@@ -403,7 +403,7 @@ test_that(".oas_ensure_json loads the json extension explicitly", {
   # found". That is what broke every CI job here while passing locally,
   # where the extension is already cached. An explicit INSTALL works in
   # both places.
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(.oas_duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   .oas_ensure_json(con)
@@ -430,7 +430,7 @@ test_that("a JSON-text corpus loads json before using json_extract_string", {
   files <- list.files(corpus, pattern = "[.]parquet$",
                       recursive = TRUE, full.names = TRUE)
   expect_gt(length(files), 0L)
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(.oas_duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   re <- .oas_refs_expr(con, files)
