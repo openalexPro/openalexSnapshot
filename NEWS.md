@@ -1,3 +1,5 @@
+# openalexSnapshot (development version)
+
 # openalexSnapshot 0.3.6
 
 - DuckDB connections no longer print duckdb 2.0's "storing downloaded
