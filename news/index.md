@@ -1,5 +1,15 @@
 # Changelog
 
+## openalexSnapshot 0.3.6
+
+- DuckDB connections no longer print duckdb 2.0’s “storing downloaded
+  extensions and secrets under ~/.duckdb” message (up to 60 times per
+  run), and no longer ask to create `~/.duckdb` in interactive sessions.
+  The location duckdb would choose itself is passed explicitly
+  (`~/.duckdb` if it exists, a temporary directory otherwise); a
+  `duckdb.home` option or `DUCKDB_R_HOME` you set is still respected
+  (openalexPro/openalexPro#88).
+
 ## openalexSnapshot 0.3.5
 
 - Citation: `citation("openalexSnapshot")` now cites the package with
